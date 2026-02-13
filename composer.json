@@ -1,0 +1,44 @@
+{
+    "name": "cc-consulting-nv/laravel-cc-blog",
+    "description": "Reusable Laravel package for CC Platform blog integration with Filament admin, Tiptap converters, and Vue SPA",
+    "keywords": ["laravel", "blog", "filament", "tiptap", "cc-platform"],
+    "license": "proprietary",
+    "type": "library",
+    "require": {
+        "php": "^8.4",
+        "filament/filament": "^4.0",
+        "illuminate/support": "^12.0",
+        "livewire/livewire": "^3.0",
+        "spatie/laravel-package-tools": "^1.19"
+    },
+    "require-dev": {
+        "larastan/larastan": "^3.0",
+        "orchestra/testbench": "^10.0",
+        "pestphp/pest": "^3.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "CcConsulting\\Blog\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "CcConsulting\\Blog\\Tests\\": "tests/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "CcConsulting\\Blog\\CcBlogServiceProvider"
+            ]
+        }
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "pestphp/pest-plugin": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}

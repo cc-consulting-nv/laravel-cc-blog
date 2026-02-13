@@ -1,0 +1,21 @@
+{
+    "name": "@cc-consulting-nv/laravel-cc-blog",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "vite build",
+        "dev": "vite"
+    },
+    "dependencies": {
+        "@cc-consulting-nv/ccsdk": "1.0.14",
+        "@tiptap/core": "^3.19.0",
+        "@tiptap/pm": "^3.19.0",
+        "marked": "^17.0.2",
+        "vue": "^3.5.13"
+    },
+    "devDependencies": {
+        "@vitejs/plugin-vue": "^6.0.4",
+        "vite": "^7.2.2"
+    }
+}
