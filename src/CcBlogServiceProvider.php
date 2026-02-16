@@ -33,16 +33,10 @@ final class CcBlogServiceProvider extends PackageServiceProvider
             Livewire::propertySynthesizer(BlogPostSynth::class);
         }
 
-        // Register JS assets for Filament (markdown paste extension)
-        if (class_exists(FilamentAsset::class)) {
-            FilamentAsset::register([
-                Js::make('markdown-paste', __DIR__.'/../dist/markdown-paste.js'),
-            ], 'cc-consulting-nv/laravel-cc-blog');
-        }
-
-        // Publish blog-admin JS asset to public/vendor
+        // Publish JS assets to public/vendor
         $this->publishes([
             __DIR__.'/../dist/blog-admin.js' => public_path('vendor/cc-blog/blog-admin.js'),
+            __DIR__.'/../dist/markdown-paste.js' => public_path('vendor/cc-blog/markdown-paste.js'),
         ], 'cc-blog-assets');
     }
 }
