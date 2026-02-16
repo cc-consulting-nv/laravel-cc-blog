@@ -28,9 +28,14 @@ final class CcBlogServiceProvider extends PackageServiceProvider
         // Register CcPlatformApi as singleton
         $this->app->singleton(CcPlatformApi::class);
 
-        // Register Livewire synthesizer for API-backed BlogPost model
+        // Register Livewire synthesizer for API-backed BlogPost model.
+        // Must use app->booted() to ensure registration happens AFTER all
+        // other synths (ModelSynth, WireableSynth, etc.) so array_unshift
+        // places BlogPostSynth at index 0, matching before ModelSynth.
         if (class_exists(Livewire::class)) {
-            Livewire::propertySynthesizer(BlogPostSynth::class);
+            $this->app->booted(function (): void {
+                Livewire::propertySynthesizer(BlogPostSynth::class);
+            });
         }
 
         // Publish JS assets to public/vendor
