@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CcConsulting\Blog\Http\Controllers;
 
 use CcConsulting\Blog\Services\CcPlatformApi;
+use CcConsulting\Blog\Services\TiptapToHtmlConverter;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -46,6 +47,16 @@ final readonly class BlogController
 
         if ($post === null) {
             throw new NotFoundHttpException('Blog post not found');
+        }
+
+        // Re-render content from Tiptap JSON to preserve links and spacing.
+        // The API's contentHtml uses Tiptap-PHP without the Link extension,
+        // which strips all <a> tags from the output.
+        /** @var array<string, mixed>|null $content */
+        $content = $post['content'] ?? null;
+
+        if (is_array($content) && isset($content['type'])) {
+            $post['contentHtml'] = TiptapToHtmlConverter::convert($content);
         }
 
         // Get related posts (same category or just recent)
