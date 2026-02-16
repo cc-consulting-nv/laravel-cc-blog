@@ -25,9 +25,14 @@ final class MarkdownPastePlugin implements RichContentPlugin
      */
     public function getTipTapJsExtensions(): array
     {
+        try {
+            $src = FilamentAsset::getAlpineComponentSrc('markdown-paste', 'cc-consulting-nv/laravel-cc-blog');
+        } catch (\LogicException) {
+            $src = null;
+        }
+
         return [
-            FilamentAsset::getAlpineComponentSrc('markdown-paste', 'cc-consulting-nv/laravel-cc-blog')
-                ?? (string) asset('vendor/cc-blog/markdown-paste.js'),
+            $src ?? (string) asset('vendor/cc-blog/markdown-paste.js'),
         ];
     }
 
