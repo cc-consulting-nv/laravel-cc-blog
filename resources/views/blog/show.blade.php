@@ -92,7 +92,7 @@
         <img src="{{ $post['ogImage'] }}" alt="{{ $post['title'] }}" class="w-full rounded-2xl object-cover max-h-96">
     @endif
 
-    <article class="prose max-w-none">
+    <article class="blog-prose max-w-none">
         {!! $post['contentHtml'] ?? '' !!}
     </article>
 
