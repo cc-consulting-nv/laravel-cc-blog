@@ -7,7 +7,6 @@ namespace CcConsulting\Blog\Filament\Plugins;
 use Filament\Actions\Action;
 use Filament\Forms\Components\RichEditor\Plugins\Contracts\RichContentPlugin;
 use Filament\Forms\Components\RichEditor\RichEditorTool;
-use Filament\Support\Facades\FilamentAsset;
 use Tiptap\Core\Extension;
 
 final class MarkdownPastePlugin implements RichContentPlugin
@@ -25,14 +24,8 @@ final class MarkdownPastePlugin implements RichContentPlugin
      */
     public function getTipTapJsExtensions(): array
     {
-        try {
-            $src = FilamentAsset::getAlpineComponentSrc('markdown-paste', 'cc-consulting-nv/laravel-cc-blog');
-        } catch (\LogicException) {
-            $src = null;
-        }
-
         return [
-            $src ?? (string) asset('vendor/cc-blog/markdown-paste.js'),
+            (string) asset('vendor/cc-blog/markdown-paste.js'),
         ];
     }
 
