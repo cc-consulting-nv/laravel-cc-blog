@@ -67,7 +67,9 @@ export default Extension.create({
             const converted = marked.parse(text, { async: false });
 
             event.preventDefault();
-            editor.commands.insertContent(converted);
+            editor.commands.insertContent(converted, {
+              parseOptions: { preserveWhitespace: "full" },
+            });
 
             return true;
           },

@@ -8046,7 +8046,9 @@ const Ol = V.create({
             if (s && new DOMParser().parseFromString(s, "text/html").body.querySelector("h1,h2,h3,h4,h5,h6,strong,em,ul,ol,table,a[href]"))
               return !1;
             const o = T.parse(i, { async: !1 });
-            return t.preventDefault(), r.commands.insertContent(o), !0;
+            return t.preventDefault(), r.commands.insertContent(o, {
+              parseOptions: { preserveWhitespace: "full" }
+            }), !0;
           }
         }
       })
