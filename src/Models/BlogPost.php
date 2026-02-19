@@ -7,6 +7,7 @@ namespace CcConsulting\Blog\Models;
 use CcConsulting\Blog\Exceptions\ApiRequestException;
 use CcConsulting\Blog\Services\CcPlatformApi;
 use CcConsulting\Blog\Services\HtmlToTiptapConverter;
+use CcConsulting\Blog\Services\TiptapToHtmlConverter;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -109,12 +110,12 @@ final class BlogPost extends Model
         $excerpt = $data['excerpt'] ?? null;
         $post->excerpt = is_string($excerpt) ? $excerpt : null;
 
-        // The API returns content as Tiptap JSON and contentHtml as rendered HTML.
-        // Store Tiptap JSON directly — Filament's RichEditor natively works with JSON,
-        // and the BlogController renders HTML from JSON for public display.
+        // The API returns content as Tiptap JSON. Convert to HTML for the RichEditor,
+        // which expects HTML. On save, toApiPayload() converts HTML back to Tiptap JSON.
+        // This ensures edits (including spacing fixes) round-trip correctly.
         $content = $data['content'] ?? $data['body'] ?? null;
         if (is_array($content) && isset($content['type'])) {
-            $post->content = $content;
+            $post->content = TiptapToHtmlConverter::convert($content);
         } elseif (is_string($content)) {
             $post->content = $content;
         } else {
