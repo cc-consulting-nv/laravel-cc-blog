@@ -1,15 +1,13 @@
 /**
  * Blog Admin Entry Point
  *
- * This initializes the Vue blog admin component with the cc-platform-sdk.
- * Uses localStorage for token persistence (matching social UI approach).
+ * Initializes the Vue blog admin component with a lightweight API client.
+ * Uses localStorage for token persistence.
  */
 import { createApp } from "vue";
-import { CcPlatformSdk, StorageTokenProvider } from "@cc-consulting-nv/ccsdk";
 import BlogAdmin from "./components/blog/BlogAdmin.vue";
 
 // Get API URL from meta tag or environment
-// Default based on hostname: localtest.me for local dev, app.closedcircuit.io for production
 const defaultApiUrl = window.location.hostname.includes("localtest.me")
     ? "https://cc.localtest.me"
     : "https://app.closedcircuitconsulting.com";
@@ -19,16 +17,29 @@ const apiUrl =
     import.meta.env.VITE_CC_PLATFORM_API_URL ||
     defaultApiUrl;
 
-// Initialize token provider using localStorage for BOTH access and refresh tokens
-// This ensures tokens persist across page refreshes
-const tokenProvider = new StorageTokenProvider(
-    localStorage,
-    "cc_blog_admin_tokens",
-);
+const TOKEN_KEY = "cc_blog_admin_tokens";
+
+// Simple token provider backed by localStorage
+const tokenProvider = {
+    getTokens() {
+        try {
+            const raw = localStorage.getItem(TOKEN_KEY);
+            return raw ? JSON.parse(raw) : null;
+        } catch {
+            return null;
+        }
+    },
+    setTokens(tokens) {
+        localStorage.setItem(TOKEN_KEY, JSON.stringify(tokens));
+    },
+    clearTokens() {
+        localStorage.removeItem(TOKEN_KEY);
+    },
+};
 
 /**
- * Refresh tokens by calling the API directly
- * (Similar to social UI approach to avoid circular dependency)
+ * Refresh tokens by calling the API directly.
+ * Returns new tokens or throws on failure.
  */
 async function refreshTokens() {
     const tokens = tokenProvider.getTokens();
@@ -51,8 +62,6 @@ async function refreshTokens() {
     }
 
     const data = await response.json();
-
-    // Handle different response formats
     const newAccessToken =
         data.access_token || data.accessToken || data.data?.access_token;
     const newRefreshToken =
@@ -67,41 +76,122 @@ async function refreshTokens() {
         refreshToken: newRefreshToken || tokens.refreshToken,
     };
 
-    // Store the new tokens
     tokenProvider.setTokens(newTokens);
-    console.log("[Blog Admin] Token refreshed successfully");
-
     return newTokens;
 }
 
-// Initialize SDK with refresh token support
-const sdk = new CcPlatformSdk({
-    baseUrl: apiUrl,
-    tokenProvider,
-    dbName: "CcBlogAdminCache",
-    onRefreshTokens: refreshTokens,
-    onUnauthorized: () => {
-        tokenProvider.clearTokens();
-        window.dispatchEvent(new CustomEvent("cc:unauthorized"));
+/**
+ * Lightweight API client — wraps fetch with auth headers and auto token refresh.
+ */
+const apiClient = {
+    async request(method, path, body = null, retry = true) {
+        const tokens = tokenProvider.getTokens();
+        const headers = {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "X-Requested-With": "XMLHttpRequest",
+        };
+        if (tokens?.accessToken) {
+            headers["Authorization"] = `Bearer ${tokens.accessToken}`;
+        }
+
+        const options = { method, headers };
+        if (body !== null) {
+            options.body = JSON.stringify(body);
+        }
+
+        const response = await fetch(`${apiUrl}${path}`, options);
+
+        // Auto-refresh on 401
+        if (response.status === 401 && retry) {
+            try {
+                await refreshTokens();
+                return this.request(method, path, body, false);
+            } catch {
+                tokenProvider.clearTokens();
+                window.dispatchEvent(new CustomEvent("cc:unauthorized"));
+                throw new Error("Session expired. Please log in again.");
+            }
+        }
+
+        return response;
     },
-});
 
-// Expose SDK globally for Vue components
-window.ccSdk = sdk;
+    async json(method, path, body = null) {
+        const response = await this.request(method, path, body);
+        if (!response.ok) {
+            const text = await response.text();
+            let message = `Request failed (${response.status})`;
+            try {
+                const json = JSON.parse(text);
+                message = json.message || json.error || message;
+            } catch {}
+            throw new Error(message);
+        }
+        return response.json();
+    },
+
+    // Auth
+    async requestAuthCode(email) {
+        await this.json("POST", "/v1/auth/request-code", { email });
+    },
+
+    async loginWithMagicLink(email, code) {
+        const data = await this.json("POST", "/v1/auth/verify-code", { email, code });
+        const accessToken = data.access_token || data.accessToken || data.data?.access_token;
+        const refreshToken = data.refresh_token || data.refreshToken || data.data?.refresh_token;
+        if (accessToken) {
+            tokenProvider.setTokens({ accessToken, refreshToken });
+        }
+        return { accessToken, refreshToken };
+    },
+
+    async getCurrentUser() {
+        const data = await this.json("GET", "/v1/users/me");
+        return data.data || data;
+    },
+
+    // Blog posts
+    async listBlogPosts(params = {}) {
+        const qs = new URLSearchParams(
+            Object.fromEntries(
+                Object.entries({ status: "all", ...params }).filter(
+                    ([, v]) => v !== undefined && v !== null,
+                ),
+            ),
+        ).toString();
+        const data = await this.json("GET", `/v1/blog${qs ? "?" + qs : ""}`);
+        return data;
+    },
+
+    async getBlogCategories() {
+        const data = await this.json("GET", "/v1/blog/categories");
+        return data.data || data;
+    },
+
+    async createBlogPost(payload) {
+        const data = await this.json("POST", "/v1/blog", payload);
+        return data.data || data;
+    },
+
+    async updateBlogPost(ulid, payload) {
+        const data = await this.json("PUT", `/v1/blog/${ulid}`, payload);
+        return data.data || data;
+    },
+
+    async deleteBlogPost(ulid) {
+        await this.request("DELETE", `/v1/blog/${ulid}`);
+    },
+
+    async publishBlogPost(ulid) {
+        const data = await this.json("POST", `/v1/blog/${ulid}/publish`);
+        return data.data || data;
+    },
+};
+
+// Expose globally for Vue components
+window.ccApiClient = apiClient;
 window.ccTokenProvider = tokenProvider;
-
-// Debug: log SDK version and methods
-console.log("[Blog Admin] SDK version:", CcPlatformSdk.SDK_VERSION);
-console.log(
-    "[Blog Admin] SDK has requestAuthCode:",
-    typeof sdk.requestAuthCode,
-);
-console.log(
-    "[Blog Admin] SDK methods:",
-    Object.getOwnPropertyNames(Object.getPrototypeOf(sdk)).filter((m) =>
-        m.startsWith("request"),
-    ),
-);
 
 // Mount Vue app if element exists
 const mountPoint = document.getElementById("blog-admin-app");

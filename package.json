@@ -8,7 +8,6 @@
         "dev": "vite"
     },
     "dependencies": {
-        "@cc-consulting-nv/ccsdk": "1.0.14",
         "@tiptap/core": "^3.19.0",
         "@tiptap/pm": "^3.19.0",
         "marked": "^17.0.2",

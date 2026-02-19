@@ -1,9 +1,8 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from "vue";
 
-// SDK is exposed globally via window.ccSdk
-// Access via getter to ensure it's available after initialization
-const getSdk = () => window.ccSdk;
+// API client and token provider are exposed globally via blog-admin.js
+const getSdk = () => window.ccApiClient;
 const getTokenProvider = () => window.ccTokenProvider;
 
 // State
