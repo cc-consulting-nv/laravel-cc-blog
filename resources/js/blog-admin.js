@@ -133,11 +133,11 @@ const apiClient = {
 
     // Auth
     async requestAuthCode(email) {
-        await this.json("POST", "/v1/auth/request-code", { email });
+        await this.json("POST", "/sendBlogAuthCode", { email });
     },
 
     async loginWithMagicLink(email, code) {
-        const data = await this.json("POST", "/v1/auth/verify-code", { email, code });
+        const data = await this.json("POST", "/authCodeLogin", { identifier: email, authCode: parseInt(code, 10) });
         const accessToken = data.access_token || data.accessToken || data.data?.access_token;
         const refreshToken = data.refresh_token || data.refreshToken || data.data?.refresh_token;
         if (accessToken) {
