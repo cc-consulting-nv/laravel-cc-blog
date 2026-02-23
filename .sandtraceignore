@@ -1,0 +1,6 @@
+vendor/
+node_modules/
+public/build/
+dist/
+storage/
+tests/fixtures/
