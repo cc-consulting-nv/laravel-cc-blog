@@ -1,13 +1,28 @@
 @extends('layouts.app')
 
-@section('title', ($post['metaTitle'] ?? $post['title']) . ' | Blog')
-@section('meta_description', $post['metaDescription'] ?? $post['excerpt'] ?? '')
+@php
+    $canonicalUrl = $post['canonicalUrl'] ?? url()->current();
+    $socialTitle = $post['socialTitle'] ?? $post['metaTitle'] ?? $post['title'];
+    $socialDescription = $post['socialDescription'] ?? $post['metaDescription'] ?? $post['excerpt'] ?? '';
+    $socialImage = $post['socialImage'] ?? $post['ogImage'] ?? null;
+    $summaryText = $post['answerSummary'] ?? $post['excerpt'] ?? '';
+    $faqItems = is_array($post['faqItems'] ?? null) ? $post['faqItems'] : [];
+@endphp
 
-@section('og_title', $post['metaTitle'] ?? $post['title'])
-@section('og_description', $post['metaDescription'] ?? $post['excerpt'] ?? '')
+@section('title', ($post['metaTitle'] ?? $post['title']) . ' | Blog')
+@section('meta_description', $post['metaDescription'] ?? $summaryText)
+@section('canonical_url', $canonicalUrl)
+@section('og_title', $socialTitle)
+@section('og_description', $socialDescription)
 @section('og_type', 'article')
-@if(!empty($post['ogImage']))
-@section('og_image', $post['ogImage'])
+@section('og_url', $canonicalUrl)
+@section('twitter_title', $socialTitle)
+@section('twitter_description', $socialDescription)
+@section('article_published_time', $post['publishedAt'] ?? '')
+@section('article_modified_time', $post['updatedAt'] ?? '')
+@if(!empty($socialImage))
+@section('og_image', $socialImage)
+@section('twitter_image', $socialImage)
 @endif
 
 @push('schema')
@@ -16,11 +31,12 @@
     "@@context": "https://schema.org",
     "@@type": "BlogPosting",
     "headline": "{{ $post['title'] }}",
-    "description": "{{ $post['excerpt'] ?? '' }}",
+    "description": "{{ $summaryText }}",
     "datePublished": "{{ $post['publishedAt'] ?? '' }}",
     "dateModified": "{{ $post['updatedAt'] ?? '' }}",
-    @if(!empty($post['ogImage']))
-    "image": "{{ $post['ogImage'] }}",
+    "url": "{{ $canonicalUrl }}",
+    @if(!empty($socialImage))
+    "image": "{{ $socialImage }}",
     @endif
     "author": {
         "@@type": "Person",
@@ -32,10 +48,30 @@
     },
     "mainEntityOfPage": {
         "@@type": "WebPage",
-        "@@id": "{{ url()->current() }}"
+        "@@id": "{{ $canonicalUrl }}"
     }
 }
 </script>
+@if(!empty($faqItems))
+<script type="application/ld+json">
+{
+    "@@context": "https://schema.org",
+    "@@type": "FAQPage",
+    "mainEntity": [
+        @foreach($faqItems as $index => $faq)
+        {
+            "@@type": "Question",
+            "name": "{{ $faq['question'] ?? '' }}",
+            "acceptedAnswer": {
+                "@@type": "Answer",
+                "text": "{{ $faq['answer'] ?? '' }}"
+            }
+        }@if($index < count($faqItems) - 1),@endif
+        @endforeach
+    ]
+}
+</script>
+@endif
 @endpush
 
 @section('content')
@@ -88,13 +124,34 @@
         </div>
     </header>
 
-    @if(!empty($post['ogImage']))
-        <img src="{{ $post['ogImage'] }}" alt="{{ $post['title'] }}" class="w-full rounded-2xl object-cover max-h-96">
+    @if(!empty($socialImage))
+        <img src="{{ $socialImage }}" alt="{{ $post['title'] }}" class="w-full rounded-2xl object-cover max-h-96">
+    @endif
+
+    @if(!empty($post['answerSummary']))
+        <section class="rounded-2xl border border-amber-500/20 bg-amber-500/5 p-6">
+            <h2 class="text-sm font-semibold uppercase tracking-widest text-amber-300">Quick Answer</h2>
+            <p class="mt-3 text-base text-slate-200">{{ $post['answerSummary'] }}</p>
+        </section>
     @endif
 
     <article class="blog-prose max-w-none">
         {!! $post['contentHtml'] ?? '' !!}
     </article>
+
+    @if(!empty($faqItems))
+    <section class="pt-8 border-t border-white/10">
+        <h2 class="text-lg font-semibold text-amber-200 mb-6">Frequently Asked Questions</h2>
+        <div class="space-y-4">
+            @foreach($faqItems as $faq)
+                <div class="rounded-2xl border border-white/10 bg-white/5 p-5">
+                    <h3 class="text-base font-medium text-white">{{ $faq['question'] ?? '' }}</h3>
+                    <p class="mt-2 text-sm text-slate-300">{{ $faq['answer'] ?? '' }}</p>
+                </div>
+            @endforeach
+        </div>
+    </section>
+    @endif
 
     {{-- Related Posts --}}
     @if(!empty($related))
@@ -103,8 +160,8 @@
         <div class="grid gap-6 md:grid-cols-3">
             @foreach($related as $entry)
                 <a href="{{ route('blog.show', $entry['slug']) }}" class="border border-white/5 rounded-2xl p-5 bg-white/5 block hover:border-white/10 transition group">
-                    @if(!empty($entry['ogImage']))
-                        <img src="{{ $entry['ogImage'] }}" alt="{{ $entry['title'] }}" class="w-full h-32 object-cover rounded-xl mb-3">
+                    @if(!empty($entry['socialImage'] ?? $entry['ogImage'] ?? null))
+                        <img src="{{ $entry['socialImage'] ?? $entry['ogImage'] }}" alt="{{ $entry['title'] }}" class="w-full h-32 object-cover rounded-xl mb-3">
                     @endif
                     <p class="text-xs uppercase tracking-widest text-slate-400 mb-2">
                         {{ !empty($entry['publishedAt']) ? \Carbon\Carbon::parse($entry['publishedAt'])->format('M d, Y') : '' }}
