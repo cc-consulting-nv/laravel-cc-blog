@@ -169,6 +169,11 @@ const apiClient = {
         return data.data || data;
     },
 
+    async getBlogPost(slug) {
+        const data = await this.json("GET", `/v1/blog/${slug}`);
+        return data.data || data;
+    },
+
     async createBlogPost(payload) {
         const data = await this.json("POST", "/v1/blog", payload);
         return data.data || data;
@@ -186,6 +191,29 @@ const apiClient = {
     async publishBlogPost(ulid) {
         const data = await this.json("POST", `/v1/blog/${ulid}/publish`);
         return data.data || data;
+    },
+
+    async uploadImage(file) {
+        // Step 1: Get presigned URL from CC API
+        const data = await this.json("POST", "/v1/media/signed-storage-url", {
+            content_type: file.type,
+        });
+
+        // Step 2: Upload file directly to S3/R2
+        const uploadResponse = await fetch(data.url, {
+            method: "PUT",
+            headers: { "Content-Type": file.type },
+            body: file,
+        });
+
+        if (!uploadResponse.ok) {
+            throw new Error(`Image upload failed: ${uploadResponse.status}`);
+        }
+
+        // Step 3: Confirm upload with CC API
+        await this.json("POST", "/v1/media/upload", { key: data.key });
+
+        return data.publicUrl;
     },
 };
 

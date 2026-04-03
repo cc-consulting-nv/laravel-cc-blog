@@ -38,10 +38,12 @@ final class CcBlogServiceProvider extends PackageServiceProvider
             });
         }
 
-        // Publish JS assets to public/vendor
+        // Publish JS/CSS assets to public/vendor
         $this->publishes([
             __DIR__.'/../dist/blog-admin.js' => public_path('vendor/cc-blog/blog-admin.js'),
             __DIR__.'/../dist/markdown-paste.js' => public_path('vendor/cc-blog/markdown-paste.js'),
+            __DIR__.'/../dist/laravel-cc-blog.css' => public_path('vendor/cc-blog/laravel-cc-blog.css'),
+            __DIR__.'/../dist/chunks' => public_path('vendor/cc-blog/chunks'),
         ], 'cc-blog-assets');
     }
 }

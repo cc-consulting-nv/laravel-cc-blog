@@ -34,6 +34,12 @@ use Illuminate\Support\Collection;
  * @property int|null $feature_order
  * @property string|null $meta_title
  * @property string|null $meta_description
+ * @property string|null $canonical_url
+ * @property string|null $social_title
+ * @property string|null $social_description
+ * @property string|null $social_image_url
+ * @property string|null $answer_summary
+ * @property array<int, array{question: string, answer: string}>|null $faq_items
  * @property CarbonInterface|null $publishedAt
  * @property CarbonInterface|null $scheduled_for
  * @property CarbonInterface|null $createdAt
@@ -81,6 +87,12 @@ final class BlogPost extends Model
         'feature_order',
         'meta_title',
         'meta_description',
+        'canonical_url',
+        'social_title',
+        'social_description',
+        'social_image_url',
+        'answer_summary',
+        'faq_items',
         'publishedAt',
         'scheduled_for',
         'createdAt',
@@ -151,6 +163,24 @@ final class BlogPost extends Model
 
         $metaDescription = $data['metaDescription'] ?? $data['meta_description'] ?? null;
         $post->meta_description = is_string($metaDescription) ? $metaDescription : null;
+
+        $canonicalUrl = $data['canonicalUrl'] ?? $data['canonical_url'] ?? null;
+        $post->canonical_url = is_string($canonicalUrl) ? $canonicalUrl : null;
+
+        $socialTitle = $data['socialTitle'] ?? $data['social_title'] ?? null;
+        $post->social_title = is_string($socialTitle) ? $socialTitle : null;
+
+        $socialDescription = $data['socialDescription'] ?? $data['social_description'] ?? null;
+        $post->social_description = is_string($socialDescription) ? $socialDescription : null;
+
+        $socialImageUrl = $data['socialImageUrl'] ?? $data['socialImage'] ?? $data['social_image_url'] ?? null;
+        $post->social_image_url = is_string($socialImageUrl) ? $socialImageUrl : null;
+
+        $answerSummary = $data['answerSummary'] ?? $data['answer_summary'] ?? null;
+        $post->answer_summary = is_string($answerSummary) ? $answerSummary : null;
+
+        $faqItems = $data['faqItems'] ?? $data['faq_items'] ?? null;
+        $post->faq_items = is_array($faqItems) ? $faqItems : null;
 
         $publishedAt = $data['publishedAt'] ?? null;
         if (is_string($publishedAt)) {
@@ -235,7 +265,7 @@ final class BlogPost extends Model
         }
 
         if ($this->category_id !== null && $this->category_id !== '') {
-            $payload['category_id'] = (int) $this->category_id;
+            $payload['category_id'] = (string) $this->category_id;
         }
 
         if ($this->isFeatured) {
@@ -252,6 +282,30 @@ final class BlogPost extends Model
 
         if ($this->meta_description !== null && $this->meta_description !== '') {
             $payload['meta_description'] = $this->meta_description;
+        }
+
+        if ($this->canonical_url !== null && $this->canonical_url !== '') {
+            $payload['canonical_url'] = $this->canonical_url;
+        }
+
+        if ($this->social_title !== null && $this->social_title !== '') {
+            $payload['social_title'] = $this->social_title;
+        }
+
+        if ($this->social_description !== null && $this->social_description !== '') {
+            $payload['social_description'] = $this->social_description;
+        }
+
+        if ($this->social_image_url !== null && $this->social_image_url !== '') {
+            $payload['social_image_url'] = $this->social_image_url;
+        }
+
+        if ($this->answer_summary !== null && $this->answer_summary !== '') {
+            $payload['answer_summary'] = $this->answer_summary;
+        }
+
+        if (is_array($this->faq_items) && $this->faq_items !== []) {
+            $payload['faq_items'] = $this->faq_items;
         }
 
         if ($this->scheduled_for !== null) {
@@ -316,6 +370,7 @@ final class BlogPost extends Model
             'author' => 'array',
             'isFeatured' => 'boolean',
             'feature_order' => 'integer',
+            'faq_items' => 'array',
             'publishedAt' => 'datetime',
             'scheduled_for' => 'datetime',
             'createdAt' => 'datetime',

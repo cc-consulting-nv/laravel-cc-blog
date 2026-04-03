@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from "vue";
+import TipTapEditor from "./TipTapEditor.vue";
 
 // API client and token provider are exposed globally via blog-admin.js
 const getSdk = () => window.ccApiClient;
@@ -17,14 +18,7 @@ const isCheckingAuth = ref(true); // Show loading while checking auth on mount
 // Edit/Create modal state
 const showModal = ref(false);
 const editingPost = ref(null);
-const formData = ref({
-    title: "",
-    content: { type: "doc", content: [{ type: "paragraph", content: [] }] },
-    excerpt: "",
-    status: "draft",
-    categoryId: null,
-    isFeatured: false,
-});
+const formData = ref(defaultFormData());
 
 // Login form state - magic link flow
 const loginStep = ref("email"); // 'email' or 'code'
@@ -238,33 +232,79 @@ async function loadData() {
     }
 }
 
-function openCreateModal() {
-    editingPost.value = null;
-    formData.value = {
+function defaultFormData() {
+    return {
         title: "",
+        slug: "",
         content: { type: "doc", content: [{ type: "paragraph", content: [] }] },
         excerpt: "",
         status: "draft",
-        categoryId: null,
-        isFeatured: false,
+        category_id: null,
+        is_featured: false,
+        meta_title: "",
+        meta_description: "",
+        canonical_url: "",
+        social_title: "",
+        social_description: "",
+        social_image_url: "",
+        answer_summary: "",
+        faq_items_json: "[]",
     };
+}
+
+function slugify(value) {
+    return value
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+}
+
+function handleTitleInput() {
+    if (!formData.value.slug) {
+        formData.value.slug = slugify(formData.value.title || "");
+    }
+}
+
+function openCreateModal() {
+    editingPost.value = null;
+    formData.value = defaultFormData();
     showModal.value = true;
 }
 
-function openEditModal(post) {
-    editingPost.value = post;
-    formData.value = {
-        title: post.title,
-        content: post.content || {
-            type: "doc",
-            content: [{ type: "paragraph", content: [] }],
-        },
-        excerpt: post.excerpt || "",
-        status: post.status,
-        categoryId: post.category?.id || null,
-        isFeatured: post.isFeatured,
-    };
-    showModal.value = true;
+async function openEditModal(post) {
+    loading.value = true;
+
+    try {
+        const detail = await getSdk().getBlogPost(post.slug);
+        editingPost.value = detail;
+        formData.value = {
+            ...defaultFormData(),
+            title: detail.title,
+            slug: detail.slug || "",
+            content: detail.content || {
+                type: "doc",
+                content: [{ type: "paragraph", content: [] }],
+            },
+            excerpt: detail.excerpt || "",
+            status: detail.status,
+            category_id: detail.category?.id || null,
+            is_featured: detail.isFeatured,
+            meta_title: detail.metaTitle || "",
+            meta_description: detail.metaDescription || "",
+            canonical_url: detail.canonicalUrl || "",
+            social_title: detail.socialTitle || "",
+            social_description: detail.socialDescription || "",
+            social_image_url: detail.socialImageUrl || "",
+            answer_summary: detail.answerSummary || "",
+            faq_items_json: JSON.stringify(detail.faqItems || [], null, 2),
+        };
+        showModal.value = true;
+    } catch (e) {
+        error.value = e.message || "Failed to load post";
+    } finally {
+        loading.value = false;
+    }
 }
 
 function closeModal() {
@@ -276,13 +316,26 @@ async function savePost() {
     loading.value = true;
 
     try {
+        let faqItems = [];
+
+        if (formData.value.faq_items_json?.trim()) {
+            faqItems = JSON.parse(formData.value.faq_items_json);
+            if (!Array.isArray(faqItems)) {
+                throw new Error("FAQ items must be a JSON array.");
+            }
+        }
+
+        const payload = {
+            ...formData.value,
+            faq_items: faqItems,
+        };
+
+        delete payload.faq_items_json;
+
         if (editingPost.value) {
-            await getSdk().updateBlogPost(
-                editingPost.value.ulid,
-                formData.value,
-            );
+            await getSdk().updateBlogPost(editingPost.value.ulid, payload);
         } else {
-            await getSdk().createBlogPost(formData.value);
+            await getSdk().createBlogPost(payload);
         }
         closeModal();
         await loadData();
@@ -600,7 +653,7 @@ const statusColors = {
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/70"
         >
             <div
-                class="w-full max-w-2xl rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl"
+                class="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-lg border border-slate-700 bg-slate-900 p-6 shadow-xl"
             >
                 <h2 class="mb-4 text-xl font-bold text-slate-100">
                     {{ editingPost ? "Edit Post" : "Create Post" }}
@@ -612,8 +665,19 @@ const statusColors = {
                         >
                         <input
                             v-model="formData.title"
+                            @input="handleTitleInput"
                             type="text"
                             required
+                            class="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none"
+                        />
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300"
+                            >Slug</label
+                        >
+                        <input
+                            v-model="formData.slug"
+                            type="text"
                             class="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none"
                         />
                     </div>
@@ -629,25 +693,12 @@ const statusColors = {
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-300"
-                            >Content (JSON)</label
+                            >Content</label
                         >
-                        <textarea
-                            :value="JSON.stringify(formData.content, null, 2)"
-                            @input="
-                                (e) => {
-                                    try {
-                                        formData.content = JSON.parse(
-                                            e.target.value,
-                                        );
-                                    } catch {}
-                                }
-                            "
-                            rows="6"
-                            class="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 font-mono text-sm text-slate-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none"
-                        ></textarea>
-                        <p class="mt-1 text-xs text-slate-500">
-                            TipTap/ProseMirror JSON format
-                        </p>
+                        <TipTapEditor
+                            v-model="formData.content"
+                            class="mt-1"
+                        />
                     </div>
                     <div class="grid grid-cols-2 gap-4">
                         <div>
@@ -656,7 +707,7 @@ const statusColors = {
                                 >Category</label
                             >
                             <select
-                                v-model="formData.categoryId"
+                                v-model="formData.category_id"
                                 class="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none"
                             >
                                 <option :value="null">No category</option>
@@ -686,7 +737,7 @@ const statusColors = {
                     </div>
                     <div class="flex items-center">
                         <input
-                            v-model="formData.isFeatured"
+                            v-model="formData.is_featured"
                             type="checkbox"
                             id="isFeatured"
                             class="h-4 w-4 rounded border-slate-600 bg-slate-800 text-indigo-600 focus:ring-indigo-500"
@@ -696,6 +747,94 @@ const statusColors = {
                             class="ml-2 text-sm text-slate-300"
                             >Featured post</label
                         >
+                    </div>
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300"
+                                >Meta Title</label
+                            >
+                            <input
+                                v-model="formData.meta_title"
+                                type="text"
+                                class="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300"
+                                >Canonical URL</label
+                            >
+                            <input
+                                v-model="formData.canonical_url"
+                                type="text"
+                                class="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none"
+                            />
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300"
+                            >Meta Description</label
+                        >
+                        <textarea
+                            v-model="formData.meta_description"
+                            rows="2"
+                            class="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none"
+                        ></textarea>
+                    </div>
+                    <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300"
+                                >Social Title</label
+                            >
+                            <input
+                                v-model="formData.social_title"
+                                type="text"
+                                class="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300"
+                                >Social Image URL</label
+                            >
+                            <input
+                                v-model="formData.social_image_url"
+                                type="text"
+                                class="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none"
+                            />
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300"
+                            >Social Description</label
+                        >
+                        <textarea
+                            v-model="formData.social_description"
+                            rows="2"
+                            class="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none"
+                        ></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300"
+                            >Answer Summary</label
+                        >
+                        <textarea
+                            v-model="formData.answer_summary"
+                            rows="4"
+                            class="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-slate-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none"
+                        ></textarea>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300"
+                            >FAQ Items JSON</label
+                        >
+                        <textarea
+                            v-model="formData.faq_items_json"
+                            rows="6"
+                            class="mt-1 block w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 font-mono text-sm text-slate-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:outline-none"
+                        ></textarea>
+                        <p class="mt-1 text-xs text-slate-500">
+                            Provide a JSON array like
+                            <code>[{"question":"...","answer":"..."}]</code>
+                        </p>
                     </div>
                     <div class="flex justify-end gap-4 pt-4">
                         <button
