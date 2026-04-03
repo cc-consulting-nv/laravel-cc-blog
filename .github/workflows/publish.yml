@@ -1,0 +1,166 @@
+name: Publish Package
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: Semver bump to publish
+        required: true
+        default: patch
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'main'
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          tools: composer:v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Validate Composer metadata
+        run: composer validate --strict
+
+      - name: Install PHP dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build package assets
+        run: pnpm build
+
+      - name: Verify built assets are committed
+        run: |
+          git diff --exit-code -- dist
+          test -z "$(git status --short -- dist)"
+
+  release:
+    runs-on: ubuntu-latest
+    needs: validate
+    if: github.ref_name == 'main'
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine next version
+        id: version
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TYPE: ${{ github.event.inputs.release_type || 'patch' }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const releaseType = process.env.RELEASE_TYPE ?? 'patch';
+            const semverTagPattern = /^v(\d+)\.(\d+)\.(\d+)$/;
+
+            const tags = await github.paginate(github.rest.repos.listTags, {
+              owner,
+              repo,
+              per_page: 100,
+            });
+
+            const semverTags = tags
+              .map(({ name }) => {
+                const match = name.match(semverTagPattern);
+                if (! match) {
+                  return null;
+                }
+
+                return {
+                  name,
+                  major: Number(match[1]),
+                  minor: Number(match[2]),
+                  patch: Number(match[3]),
+                };
+              })
+              .filter(Boolean)
+              .sort((a, b) => {
+                if (a.major !== b.major) {
+                  return b.major - a.major;
+                }
+
+                if (a.minor !== b.minor) {
+                  return b.minor - a.minor;
+                }
+
+                return b.patch - a.patch;
+              });
+
+            const latest = semverTags[0] ?? { major: 0, minor: 0, patch: 0 };
+
+            const currentSha = context.sha;
+            const existingTag = tags
+              .find((tag) => semverTagPattern.test(tag.name) && tag.commit.sha === currentSha)
+              ?.name;
+
+            if (existingTag) {
+              core.info(`Current commit already has release tag ${existingTag}.`);
+              core.setOutput('should_release', 'false');
+              core.setOutput('tag_name', existingTag);
+              return;
+            }
+
+            let { major, minor, patch } = latest;
+
+            switch (releaseType) {
+              case 'major':
+                major += 1;
+                minor = 0;
+                patch = 0;
+                break;
+              case 'minor':
+                minor += 1;
+                patch = 0;
+                break;
+              default:
+                patch += 1;
+            }
+
+            const tagName = `v${major}.${minor}.${patch}`;
+            core.setOutput('should_release', 'true');
+            core.setOutput('tag_name', tagName);
+            core.setOutput('release_type', releaseType);
+            core.info(`Publishing ${tagName} (${releaseType}).`);
+
+      - name: Create GitHub release
+        if: steps.version.outputs.should_release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag_name }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
+          make_latest: true
