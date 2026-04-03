@@ -9640,10 +9640,10 @@ const Bm = {
   },
   // Auth
   async requestAuthCode(e) {
-    await this.json("POST", "/v1/auth/request-code", { email: e });
+    await this.json("POST", "/sendBlogAuthCode", { email: e });
   },
   async loginWithMagicLink(e, t) {
-    const n = await this.json("POST", "/v1/auth/verify-code", { email: e, code: t }), s = n.access_token || n.accessToken || n.data?.access_token, o = n.refresh_token || n.refreshToken || n.data?.refresh_token;
+    const n = await this.json("POST", "/authCodeLogin", { identifier: e, authCode: parseInt(t, 10) }), s = n.access_token || n.accessToken || n.data?.access_token, o = n.refresh_token || n.refreshToken || n.data?.refresh_token;
     return s && xn.setTokens({ accessToken: s, refreshToken: o }), { accessToken: s, refreshToken: o };
   },
   async getCurrentUser() {
