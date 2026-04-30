@@ -6,6 +6,7 @@ namespace CcConsulting\Blog;
 
 use CcConsulting\Blog\Livewire\BlogPostSynth;
 use CcConsulting\Blog\Services\CcPlatformApi;
+use Filament\Support\Assets\Css;
 use Filament\Support\Assets\Js;
 use Filament\Support\Facades\FilamentAsset;
 use Livewire\Livewire;
@@ -38,12 +39,18 @@ final class CcBlogServiceProvider extends PackageServiceProvider
             });
         }
 
+        // Register Filament admin asset overrides for the RichEditor code blocks.
+        FilamentAsset::register([
+            Css::make('cc-blog-filament-editor', __DIR__.'/../resources/css/filament-editor.css'),
+        ], 'cc-blog');
+
         // Publish JS/CSS assets to public/vendor
         $this->publishes([
             __DIR__.'/../dist/blog-admin.js' => public_path('vendor/cc-blog/blog-admin.js'),
             __DIR__.'/../dist/markdown-paste.js' => public_path('vendor/cc-blog/markdown-paste.js'),
             __DIR__.'/../dist/laravel-cc-blog.css' => public_path('vendor/cc-blog/laravel-cc-blog.css'),
             __DIR__.'/../dist/chunks' => public_path('vendor/cc-blog/chunks'),
+            __DIR__.'/../resources/css/filament-editor.css' => public_path('vendor/cc-blog/filament-editor.css'),
         ], 'cc-blog-assets');
     }
 }
