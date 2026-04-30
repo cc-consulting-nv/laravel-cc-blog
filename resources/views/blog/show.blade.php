@@ -135,9 +135,56 @@
         </section>
     @endif
 
-    <article class="blog-prose max-w-none">
+    <article class="prose blog-prose max-w-none">
         {!! $post['contentHtml'] ?? '' !!}
     </article>
+
+    {{-- Syntax highlighting for code blocks --}}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/styles/github-dark.min.css">
+    <style>
+        .blog-prose pre {
+            background: #0d1117;
+            border: 1px solid rgba(148, 163, 184, 0.15);
+            border-radius: 0.5rem;
+            padding: 1rem 1.25rem;
+            margin: 1.25rem 0;
+            overflow-x: auto;
+            line-height: 1.55;
+            font-size: 0.875rem;
+        }
+        .blog-prose pre code {
+            background: transparent;
+            padding: 0;
+            font-family: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+            font-size: 0.875rem;
+            color: #e6edf3;
+        }
+        .blog-prose :not(pre) > code {
+            background: rgba(148, 163, 184, 0.15);
+            color: #fbbf24;
+            padding: 0.15rem 0.4rem;
+            border-radius: 0.25rem;
+            font-size: 0.85em;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/yaml.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/bash.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/dockerfile.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/php.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/javascript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/typescript.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/json.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/python.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/sql.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/markdown.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('.blog-prose pre code').forEach(function (el) {
+                if (window.hljs) { window.hljs.highlightElement(el); }
+            });
+        });
+    </script>
 
     @if(!empty($faqItems))
     <section class="pt-8 border-t border-white/10">
