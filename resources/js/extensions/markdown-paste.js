@@ -32,6 +32,65 @@ function looksLikeMarkdown(text) {
   return matches >= 2 || (matches >= 1 && lines.length <= 3);
 }
 
+// Repair nested 3-backtick fences. CommonMark closes a fenced code block
+// at the first matching backtick run, so a ```lang block that contains a
+// ```lang example inside it terminates early and the rest of the post
+// becomes mis-tokenized.
+//
+// Detection: an open ```lang fence whose intended close is preceded by
+// another bare ``` (the parser-visible "false close" of the inner example).
+// Matching pattern: ```lang ... ```inner-lang ... ``` ``` — the second
+// trailing bare fence is the real outer close. Promote the matched outer
+// pair to 4 backticks so all 3-backtick lines inside become literal content.
+function normalizeNestedFences(text) {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  const fenceOpenRe = /^(\s*)`{3}\s*\S+\s*$/;
+  const fenceBareRe = /^(\s*)`{3}\s*$/;
+
+  const promotions = new Set();
+  let i = 0;
+  while (i < lines.length) {
+    if (!fenceOpenRe.test(lines[i])) {
+      i++;
+      continue;
+    }
+    const openIdx = i;
+    let j = openIdx + 1;
+    let foundDoubleClose = -1;
+    let sawAnotherOpen = false;
+    while (j < lines.length) {
+      if (fenceOpenRe.test(lines[j])) {
+        sawAnotherOpen = true;
+        j++;
+        continue;
+      }
+      if (fenceBareRe.test(lines[j])) {
+        let k = j + 1;
+        while (k < lines.length && lines[k].trim() === "") k++;
+        if (k < lines.length && fenceBareRe.test(lines[k])) {
+          foundDoubleClose = k;
+          break;
+        }
+        break;
+      }
+      j++;
+    }
+    if (foundDoubleClose !== -1 && sawAnotherOpen) {
+      promotions.add(openIdx);
+      promotions.add(foundDoubleClose);
+      i = foundDoubleClose + 1;
+      continue;
+    }
+    i = openIdx + 1;
+  }
+
+  if (promotions.size === 0) return text;
+  for (const lineIdx of promotions) {
+    lines[lineIdx] = lines[lineIdx].replace(/`{3}/, "````");
+  }
+  return lines.join("\n");
+}
+
 const METADATA_LABELS = {
   title: "title",
   slug: "slug",
@@ -374,23 +433,41 @@ export default Extension.create({
 
             if (!looksLikeMarkdown(text)) return false;
 
-            // If clipboard has rich HTML (not just a plain-text wrapper),
-            // let the default handler use it instead of converting
-            const html = clipboardData.getData("text/html");
-            if (html) {
-              const doc = new DOMParser().parseFromString(html, "text/html");
-              const body = doc.body;
-              // Check if the HTML has real formatting (not just a <pre> or plain wrapper)
-              const hasRichContent =
-                body.querySelector("h1,h2,h3,h4,h5,h6,strong,em,ul,ol,table,a[href]");
-              if (hasRichContent) return false;
+            // Markdown with fenced code blocks: always prefer markdown
+            // conversion. Rich HTML from rendered pages or chat tools wraps
+            // code in <div><span> syntax-highlight markup that does not
+            // match TipTap's CodeBlock parseHTML rule (pre > code), so
+            // fenced code arrives as plain paragraphs.
+            const hasFencedCode = /^```/m.test(text);
+
+            if (!hasFencedCode) {
+              // If clipboard has rich HTML (not just a plain-text wrapper),
+              // let the default handler use it instead of converting
+              const html = clipboardData.getData("text/html");
+              if (html) {
+                const doc = new DOMParser().parseFromString(html, "text/html");
+                const body = doc.body;
+                const hasRichContent =
+                  body.querySelector("h1,h2,h3,h4,h5,h6,strong,em,ul,ol,table,a[href]");
+                if (hasRichContent) return false;
+              }
             }
 
             event.preventDefault();
             const { bodyMarkdown, hasDocumentMetadata, metadata } =
               parseMarkdownDocument(text);
-            const markdownToInsert = hasDocumentMetadata ? bodyMarkdown : text;
-            const converted = marked.parse(markdownToInsert, { async: false });
+            const markdownToInsert = normalizeNestedFences(
+              hasDocumentMetadata ? bodyMarkdown : text,
+            );
+            // marked emits whitespace between block tags (e.g. `</p>\n<pre>`).
+            // TipTap parses those as text nodes between blocks, producing
+            // empty paragraphs around code blocks. Strip whitespace that
+            // sits strictly between adjacent tag boundaries. Content inside
+            // <pre><code> is unaffected because text-to-tag boundaries
+            // don't match this pattern.
+            const converted = marked
+              .parse(markdownToInsert, { async: false })
+              .replace(/>\s+</g, "><");
 
             void applyMetadataToForm(editor, metadata);
 
@@ -399,9 +476,7 @@ export default Extension.create({
             }
 
             if (markdownToInsert.trim() !== "") {
-              editor.commands.insertContent(converted, {
-                parseOptions: { preserveWhitespace: "full" },
-              });
+              editor.commands.insertContent(converted);
             }
 
             return true;

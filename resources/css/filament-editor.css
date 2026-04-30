@@ -1,0 +1,36 @@
+/* Filament RichEditor code-block styling overrides.
+ * Filament/prose ships with inflated line-heights and prose-style padding for
+ * inline <code>, both of which look wrong inside <pre> blocks (extra vertical
+ * space between lines, mismatched bg). Reset code styling inside <pre> and
+ * give <pre> a dark, monospaced look that matches the public render. */
+
+.fi-fo-rich-editor .tiptap pre {
+    background: #0d1117;
+    border: 1px solid rgba(148, 163, 184, 0.18);
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+    margin: 1rem 0;
+    overflow-x: auto;
+    line-height: 1.55;
+    font-size: 0.875rem;
+}
+
+.fi-fo-rich-editor .tiptap pre code {
+    background: transparent !important;
+    padding: 0 !important;
+    line-height: 1.55 !important;
+    font-family: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+    font-size: 0.875rem;
+    color: #e6edf3;
+    display: block;
+    border: 0;
+}
+
+.fi-fo-rich-editor .tiptap :not(pre) > code {
+    background: rgba(148, 163, 184, 0.18);
+    color: #fbbf24;
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.85em;
+    font-family: 'Fira Code', ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+}
