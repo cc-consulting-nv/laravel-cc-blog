@@ -30,7 +30,7 @@ jobs:
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -41,7 +41,7 @@ jobs:
           tools: composer:v2
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: "22"
 
@@ -60,10 +60,8 @@ jobs:
       - name: Build package assets
         run: pnpm build
 
-      - name: Verify built assets are committed
-        run: |
-          git diff --exit-code -- dist
-          test -z "$(git status --short -- dist)"
+      - name: Verify dist artifacts produced
+        run: test -d dist && test -n "$(ls -A dist)"
 
   release:
     runs-on: ubuntu-latest
@@ -72,13 +70,33 @@ jobs:
 
     steps:
       - name: Check out code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.4"
+          tools: composer:v2
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build package assets
+        run: pnpm build
+
       - name: Determine next version
         id: version
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           RELEASE_TYPE: ${{ github.event.inputs.release_type || 'patch' }}
         with:
@@ -156,11 +174,26 @@ jobs:
             core.setOutput('release_type', releaseType);
             core.info(`Publishing ${tagName} (${releaseType}).`);
 
+      # dist/ is gitignored on main, but Composer git installs need it.
+      # Make a release-only commit with built dist/ added, point the tag at
+      # that commit, and push. Consumers checking out the tag get a tree
+      # with dist/ included; main stays clean.
+      - name: Tag release commit with built assets
+        if: steps.version.outputs.should_release == 'true'
+        env:
+          TAG_NAME: ${{ steps.version.outputs.tag_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f dist
+          git commit -m "chore(release): build dist for ${TAG_NAME}"
+          git tag -f "${TAG_NAME}"
+          git push origin "${TAG_NAME}" --force
+
       - name: Create GitHub release
         if: steps.version.outputs.should_release == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag_name }}
-          target_commitish: ${{ github.sha }}
           generate_release_notes: true
           make_latest: true
