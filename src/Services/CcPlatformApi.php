@@ -670,9 +670,13 @@ final class CcPlatformApi
      *
      * @param  array<string, mixed>  $options
      * @return array<string, mixed>
+     *
+     * @throws ApiRequestException
      */
     public function listAllBlogPosts(array $options = []): array
     {
+        $this->assertAuthenticated();
+
         try {
             $response = $this->authRequest('GET', '/v1/blog', [
                 ...$options,
@@ -680,7 +684,18 @@ final class CcPlatformApi
             ]);
 
             if ($response->failed()) {
-                return ['data' => [], 'meta' => []];
+                $status = $response->status();
+                $body = $response->body();
+
+                Log::warning('Blog list failed', [
+                    'status' => $status,
+                    'body' => Str::limit($body, 500),
+                ]);
+
+                throw new ApiRequestException(
+                    $this->extractErrorMessage($status, $body),
+                    $status,
+                );
             }
 
             /** @var array<string, mixed> $json */
@@ -690,7 +705,9 @@ final class CcPlatformApi
         } catch (ConnectionException $e) {
             Log::error('Blog API connection failed', ['error' => $e->getMessage()]);
 
-            return ['data' => [], 'meta' => []];
+            throw new ApiRequestException(
+                'Could not connect to the API. Please try again later.',
+            );
         }
     }
 
@@ -698,9 +715,13 @@ final class CcPlatformApi
      * Get a blog post by ULID for editing.
      *
      * @return array<string, mixed>|null
+     *
+     * @throws ApiRequestException
      */
     public function getBlogPostByUlid(string $ulid): ?array
     {
+        $this->assertAuthenticated();
+
         try {
             $response = $this->authRequest('GET', "/v1/blog/{$ulid}");
 
@@ -738,8 +759,9 @@ final class CcPlatformApi
         $url = $this->baseUrl.$path;
         $response = $this->sendRequest($method, $url, $data);
 
-        // If 401 and we have a refresh token, try refreshing
-        if ($response->status() === 401 && ! $this->apiToken) {
+        // Refresh on 401 (token expired) or 403 (some upstream endpoints
+        // return 403 when the bearer is missing/invalid rather than 401).
+        if (in_array($response->status(), [401, 403], true) && ! $this->apiToken) {
             $refreshed = $this->refreshToken();
 
             if ($refreshed) {
@@ -748,6 +770,28 @@ final class CcPlatformApi
         }
 
         return $response;
+    }
+
+    /**
+     * Throw a clear error if the caller has no usable token.
+     * Lets Filament surface "log in to CC Platform" instead of a silent 403.
+     *
+     * @throws ApiRequestException
+     */
+    private function assertAuthenticated(): void
+    {
+        if ($this->apiToken) {
+            return;
+        }
+
+        if (session('cc_access_token')) {
+            return;
+        }
+
+        throw new ApiRequestException(
+            'Not signed in to CC Platform. Visit /login to authenticate.',
+            401,
+        );
     }
 
     /**
