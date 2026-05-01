@@ -141,6 +141,7 @@ final class BlogPostForm
                             ->rows(3),
                     ])
                     ->addActionLabel('Add FAQ')
+                    ->defaultItems(0)
                     ->collapsed()
                     ->columnSpanFull(),
             ]);
