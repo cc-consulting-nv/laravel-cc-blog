@@ -59,6 +59,11 @@ final readonly class BlogController
             $post['contentHtml'] = TiptapToHtmlConverter::convert($content);
         }
 
+        // Rewrite legacy raw R2/S3 endpoint URLs to the configured MEDIA_URL host.
+        if (is_string($post['contentHtml'] ?? null) && $post['contentHtml'] !== '') {
+            $post['contentHtml'] = \CcConsulting\Blog\Models\BlogPost::rewriteMediaUrls($post['contentHtml']);
+        }
+
         // Get related posts (same category or just recent)
         /** @var array{slug?: string}|null $category */
         $category = $post['category'] ?? null;
