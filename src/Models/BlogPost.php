@@ -372,9 +372,15 @@ final class BlogPost extends Model implements HasRichContent
     public function saveViaApi(): void
     {
         $api = app(CcPlatformApi::class);
+        $desiredStatus = $this->status;
 
         if ($this->exists && $this->ulid) {
+            // The cc-api update endpoint silently drops the `status` field —
+            // it has dedicated endpoints (publish/schedule/archive) for state
+            // transitions. Submit content first, then route the status change
+            // through the right action so Save can flip Draft -> Published.
             $api->updateBlogPost($this->ulid, $this->toApiPayload());
+            $this->applyStatusTransitionIfNeeded($api, $desiredStatus);
         } else {
             $result = $api->createBlogPost($this->toApiPayload());
             if ($result) {
@@ -382,8 +388,29 @@ final class BlogPost extends Model implements HasRichContent
                 $this->id = is_string($ulid) || is_int($ulid) ? (string) $ulid : '';
                 $this->ulid = $this->id;
                 $this->exists = true;
+
+                // Newly created posts default to draft on the API. If the
+                // form requested a different status, transition now.
+                if ($desiredStatus !== '' && $desiredStatus !== 'draft') {
+                    $this->applyStatusTransitionIfNeeded($api, $desiredStatus);
+                }
             }
         }
+    }
+
+    private function applyStatusTransitionIfNeeded(CcPlatformApi $api, string $desiredStatus): void
+    {
+        if ($this->ulid === '' || $desiredStatus === '') {
+            return;
+        }
+
+        match ($desiredStatus) {
+            'published' => $api->publishBlogPost($this->ulid),
+            'scheduled' => $this->scheduled_for !== null
+                ? $api->scheduleBlogPost($this->ulid, $this->scheduled_for->toIso8601String())
+                : null,
+            default => null,
+        };
     }
 
     /**
