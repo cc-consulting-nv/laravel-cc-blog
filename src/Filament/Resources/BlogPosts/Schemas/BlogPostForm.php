@@ -53,6 +53,7 @@ final class BlogPostForm
                         'link',
                         'blockquote',
                         'codeBlock',
+                        'attachFiles',
                         'redo',
                         'undo',
                     ])

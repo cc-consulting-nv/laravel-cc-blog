@@ -425,6 +425,102 @@ final class CcPlatformApi
     }
 
     /**
+     * Upload an image to the CC Platform via the two-step S3 flow:
+     *   1. POST /v1/media/signed-storage-url to get a presigned PUT URL.
+     *   2. PUT the file bytes directly to S3/R2.
+     *   3. POST /v1/media/upload to confirm the upload (returns public URL).
+     *
+     * Returns the public URL the editor should embed.
+     */
+    public function uploadImage(string $filePath, string $contentType, string $originalName = 'upload'): string
+    {
+        try {
+            $signedResponse = $this->authRequest('POST', '/v1/media/signed-storage-url', [
+                'content_type' => $contentType,
+            ]);
+
+            if ($signedResponse->failed()) {
+                $status = $signedResponse->status();
+
+                Log::warning('Media signed-storage-url failed', [
+                    'status' => $status,
+                    'body' => $signedResponse->body(),
+                ]);
+
+                throw new ApiRequestException(
+                    $this->extractErrorMessage($status, $signedResponse->body()),
+                    $status,
+                );
+            }
+
+            /** @var array{url: string, key: string, publicUrl: string, headers?: array<string, string>} $signed */
+            $signed = $signedResponse->json('data') ?? $signedResponse->json();
+
+            if (empty($signed['url']) || empty($signed['key']) || empty($signed['publicUrl'])) {
+                throw new ApiRequestException('Invalid signed URL response from CC Platform.');
+            }
+
+            $putHeaders = $signed['headers'] ?? ['Content-Type' => $contentType];
+
+            $putResponse = Http::timeout(60)
+                ->withOptions(['verify' => false])
+                ->withHeaders($putHeaders)
+                ->withBody(file_get_contents($filePath) ?: '', $contentType)
+                ->put($signed['url']);
+
+            if ($putResponse->failed()) {
+                Log::warning('S3 PUT failed', [
+                    'status' => $putResponse->status(),
+                    'key' => $signed['key'],
+                ]);
+
+                throw new ApiRequestException(
+                    'Image upload to storage failed.',
+                    $putResponse->status(),
+                );
+            }
+
+            // Notify the CC Platform that the upload completed.
+            $confirmResponse = $this->authRequest('POST', '/v1/media/upload', [
+                'key' => $signed['key'],
+            ]);
+
+            if ($confirmResponse->failed()) {
+                Log::warning('Media upload confirm failed; falling back to publicUrl', [
+                    'status' => $confirmResponse->status(),
+                    'key' => $signed['key'],
+                ]);
+            }
+
+            // The CC Platform's signed-storage-url and media/upload endpoints
+            // currently return raw R2/S3 endpoint URLs that the CDN does not
+            // serve. Rewrite to the configured media host so embedded <img>
+            // tags in blog content resolve from the canonical media domain.
+            return $this->canonicalMediaUrl($signed['key']);
+        } catch (ConnectionException $e) {
+            Log::error('Image upload connection failed', ['error' => $e->getMessage()]);
+
+            throw new ApiRequestException(
+                'Could not connect to the API. Please try again later.',
+            );
+        }
+    }
+
+    /**
+     * Build the canonical CDN URL for an S3/R2 object key. Mirrors how cc-api
+     * resolves media via config('app.media_url') so URLs survive across
+     * R2 bucket migrations and CDN cutover.
+     */
+    private function canonicalMediaUrl(string $key): string
+    {
+        /** @var string $base */
+        $base = config('cc-blog.media_url', '');
+        $base = rtrim($base, '/');
+
+        return $base.'/'.ltrim($key, '/');
+    }
+
+    /**
      * Publish a blog post.
      *
      * @return array<string, mixed>|null

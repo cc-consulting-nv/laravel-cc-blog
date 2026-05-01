@@ -7,6 +7,19 @@ return [
     'api_token' => env('CC_PLATFORM_API_TOKEN'),
     'cache_ttl' => (int) env('CC_PLATFORM_CACHE_TTL', 300),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Media (CDN) URL
+    |--------------------------------------------------------------------------
+    |
+    | CC Platform serves uploaded media through a CDN host. The signed-storage
+    | upload flow returns raw R2/S3 endpoint URLs that the CDN does not serve;
+    | rewrite those to this canonical media host so embedded <img> tags
+    | resolve in the public blog renderer. Match the cc-api `MEDIA_URL` env.
+    |
+    */
+    'media_url' => env('CC_PLATFORM_MEDIA_URL', 'https://m.closedcircuit.io'),
+
     'routes' => [
         'enabled' => true,
         'prefix' => 'blog',

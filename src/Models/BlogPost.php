@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace CcConsulting\Blog\Models;
 
 use CcConsulting\Blog\Exceptions\ApiRequestException;
+use CcConsulting\Blog\Filament\Plugins\MarkdownPastePlugin;
 use CcConsulting\Blog\Services\CcPlatformApi;
 use CcConsulting\Blog\Services\HtmlToTiptapConverter;
 use CcConsulting\Blog\Services\TiptapToHtmlConverter;
 use Carbon\CarbonInterface;
+use Filament\Forms\Components\RichEditor\Models\Concerns\InteractsWithRichContent;
+use Filament\Forms\Components\RichEditor\Models\Contracts\HasRichContent;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
@@ -45,9 +48,16 @@ use Illuminate\Support\Collection;
  * @property CarbonInterface|null $createdAt
  * @property CarbonInterface|null $updatedAt
  */
-final class BlogPost extends Model
+final class BlogPost extends Model implements HasRichContent
 {
     use HasFactory;
+    use InteractsWithRichContent;
+
+    protected function setUpRichContent(): void
+    {
+        $this->registerRichContent('content')
+            ->plugins([new MarkdownPastePlugin]);
+    }
 
     /**
      * Disable auto-incrementing.
@@ -100,6 +110,39 @@ final class BlogPost extends Model
     ];
 
     /**
+     * Rewrite raw R2/S3 endpoint URLs in HTML content to the configured
+     * MEDIA_URL host. Legacy uploads embedded the bucket endpoint directly,
+     * which the CDN does not serve; downstream renders broke until rewritten.
+     */
+    public static function rewriteMediaUrls(string $html): string
+    {
+        /** @var string $base */
+        $base = (string) config('cc-blog.media_url', '');
+        $base = rtrim($base, '/');
+
+        if ($base === '') {
+            return $html;
+        }
+
+        // Match either `https://<hash>.r2.cloudflarestorage.com/<bucket>/<key>`
+        // or `https://<bucket>.s3.<region>.amazonaws.com/<key>`.
+        $patterns = [
+            '~https?://[a-f0-9]+\.r2\.cloudflarestorage\.com/[^/"\s\)]+/(?<key>[^"\s\)]+)~i',
+            '~https?://[^/"\s]+\.s3\.[^/"\s]+\.amazonaws\.com/(?<key>[^"\s\)]+)~i',
+        ];
+
+        foreach ($patterns as $pattern) {
+            $html = (string) preg_replace_callback(
+                $pattern,
+                static fn (array $m): string => $base.'/'.ltrim($m['key'], '/'),
+                $html,
+            );
+        }
+
+        return $html;
+    }
+
+    /**
      * Create a BlogPost instance from API response data.
      *
      * @param  array<string, mixed>  $data
@@ -133,6 +176,12 @@ final class BlogPost extends Model
         } else {
             $contentHtml = $data['contentHtml'] ?? null;
             $post->content = is_string($contentHtml) ? $contentHtml : null;
+        }
+
+        // Rewrite legacy raw R2/S3 endpoint URLs in content to the canonical
+        // CDN host so existing drafts render after the move to MEDIA_URL.
+        if (is_string($post->content) && $post->content !== '') {
+            $post->content = self::rewriteMediaUrls($post->content);
         }
 
         $status = $data['status'] ?? 'draft';
