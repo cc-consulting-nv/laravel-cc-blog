@@ -7,6 +7,7 @@
     $socialImage = $post['socialImage'] ?? $post['ogImage'] ?? null;
     $summaryText = $post['answerSummary'] ?? $post['excerpt'] ?? '';
     $faqItems = is_array($post['faqItems'] ?? null) ? $post['faqItems'] : [];
+    $howtoSteps = is_array($post['howtoSteps'] ?? null) ? $post['howtoSteps'] : [];
 @endphp
 
 @section('title', ($post['metaTitle'] ?? $post['title']) . ' | Blog')
@@ -72,6 +73,25 @@
 @endphp
 <script type="application/ld+json">
 {!! json_encode($faqPage, $jsonFlags) !!}
+</script>
+@endif
+@if(!empty($howtoSteps))
+@php
+    $howToSchema = [
+        '@context' => 'https://schema.org',
+        '@type' => 'HowTo',
+        'name' => $post['title'] ?? '',
+        'description' => $summaryText ?? '',
+        'step' => array_map(static fn (array $step, int $idx) => [
+            '@type' => 'HowToStep',
+            'position' => $idx + 1,
+            'name' => $step['name'] ?? '',
+            'text' => $step['text'] ?? '',
+        ], $howtoSteps, array_keys($howtoSteps)),
+    ];
+@endphp
+<script type="application/ld+json">
+{!! json_encode($howToSchema, $jsonFlags) !!}
 </script>
 @endif
 @endpush
@@ -141,7 +161,9 @@
         {!! $post['contentHtml'] ?? '' !!}
     </article>
 
-    {{-- Syntax highlighting for code blocks --}}
+    {{-- Code-block styling. Highlighting is server-side via scrivo/highlight.php
+         in TiptapToHtmlConverter::renderCodeBlock — we only need the token CSS
+         here. --}}
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/styles/github-dark.min.css">
     <style>
         .blog-prose pre {
@@ -168,25 +190,37 @@
             border-radius: 0.25rem;
             font-size: 0.85em;
         }
+        /* Mermaid containers — the rendered SVG sits inside; container styles
+           keep it from inheriting the dark code-block background. */
+        .blog-prose pre code.language-mermaid {
+            display: none;
+        }
+        .blog-prose .mermaid {
+            background: #ffffff;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin: 1.25rem 0;
+            overflow-x: auto;
+        }
     </style>
-    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/highlight.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/yaml.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/bash.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/dockerfile.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/php.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/javascript.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/typescript.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/json.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/python.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/sql.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.10.0/build/languages/markdown.min.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            document.querySelectorAll('.blog-prose pre code').forEach(function (el) {
-                if (window.hljs) { window.hljs.highlightElement(el); }
-            });
+
+    {{-- Mermaid diagrams (task #18). Walks <code class="language-mermaid">,
+         replaces each with a rendered SVG. mermaid.js is sandbox-CSP-friendly
+         and the SECURITY_LEVEL setting blocks <foreignObject> + JS in labels. --}}
+    @if(str_contains($post['contentHtml'] ?? '', 'language-mermaid'))
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'default' });
+        document.querySelectorAll('.blog-prose pre code.language-mermaid').forEach(function (el, i) {
+            const src = el.textContent;
+            const container = document.createElement('div');
+            container.className = 'mermaid';
+            container.id = 'mermaid-' + i;
+            el.closest('pre').replaceWith(container);
+            mermaid.render('mermaid-svg-' + i, src).then(function (out) { container.innerHTML = out.svg; });
         });
     </script>
+    @endif
 
     @if(!empty($faqItems))
     <section class="pt-8 border-t border-white/10">

@@ -1,0 +1,69 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * cc-blog CLI entry point.
+ *
+ * Subcommands:
+ *   publish <slug-dir> [--dry-run] [--strict-tags]
+ *     Publish a markdown post to cc-api. See PublishCommand for full docs.
+ */
+
+// Locate the autoloader regardless of whether we're running from the package
+// itself or vendored into a consumer project.
+$candidates = [
+    __DIR__.'/../vendor/autoload.php',           // running from the package
+    __DIR__.'/../../../autoload.php',            // vendored in consumer/vendor/bin
+    __DIR__.'/../../../../vendor/autoload.php',  // safety fallback
+];
+
+$autoload = null;
+foreach ($candidates as $path) {
+    if (is_file($path)) {
+        $autoload = $path;
+        break;
+    }
+}
+
+if ($autoload === null) {
+    fwrite(STDERR, "cc-blog: cannot locate composer autoload.php\n");
+    exit(1);
+}
+
+require $autoload;
+
+use CcConsulting\Blog\Cli\BulkImportCommand;
+use CcConsulting\Blog\Cli\PublishCommand;
+
+array_shift($argv); // drop the bin name
+$subcommand = array_shift($argv) ?? 'help';
+
+switch ($subcommand) {
+    case 'publish':
+        exit((new PublishCommand())->run($argv));
+    case 'bulk-publish':
+        exit((new BulkImportCommand())->run($argv));
+    case 'help':
+    case '--help':
+    case '-h':
+        fwrite(STDOUT, <<<HELP
+cc-blog — publish markdown blog posts to the CC platform
+
+usage:
+  cc-blog publish <slug-dir> [--dry-run] [--strict-tags]
+  cc-blog bulk-publish <root-dir> [--dry-run] [--fail-fast]
+  cc-blog help
+
+env:
+  CC_BLOG_TOKEN          API token (preferred over interactive login)
+  CC_PLATFORM_API_URL    API base (default: https://app.closedcircuitconsultants.com)
+HELP);
+        fwrite(STDOUT, "\n");
+        exit(0);
+    default:
+        fwrite(STDERR, "cc-blog: unknown subcommand '$subcommand'\n");
+        fwrite(STDERR, "Run 'cc-blog help' for usage.\n");
+        exit(1);
+}

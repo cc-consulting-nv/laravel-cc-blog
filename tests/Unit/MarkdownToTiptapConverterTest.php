@@ -122,17 +122,26 @@ it('emits horizontalRule for thematic break', function (): void {
     expect($types)->toContain('horizontalRule');
 });
 
-it('emits blockquote containing a paragraph somewhere in its content', function (): void {
-    // Note: HtmlToTiptapConverter also emits stray "\n" text nodes around
-    // block children — pre-existing package bug tracked separately. We assert
-    // only that a paragraph exists inside the blockquote.
+it('emits blockquote with only block-level children (no stray text nodes)', function (): void {
     $tiptap = MarkdownToTiptapConverter::convert('> quoted text');
 
     $quote = $tiptap['content'][0];
     $innerTypes = array_column($quote['content'], 'type');
 
     expect($quote['type'])->toBe('blockquote')
-        ->and($innerTypes)->toContain('paragraph');
+        ->and($innerTypes)->toContain('paragraph')
+        ->and($innerTypes)->not->toContain('text');
+});
+
+it('emits doc with only block-level children (no stray text nodes)', function (): void {
+    // Regression test for the HtmlToTiptapConverter stray-newline bug fixed
+    // alongside the markdown converter.
+    $md = "first paragraph\n\nsecond paragraph\n";
+    $tiptap = MarkdownToTiptapConverter::convert($md);
+
+    $topTypes = array_column($tiptap['content'], 'type');
+
+    expect($topTypes)->not->toContain('text');
 });
 
 it('emits codeBlock with language attr from fenced fence', function (): void {

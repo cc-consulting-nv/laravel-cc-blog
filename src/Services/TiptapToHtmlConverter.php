@@ -212,16 +212,39 @@ final class TiptapToHtmlConverter
 
         /** @var list<array<string, mixed>> $content */
         $content = $node['content'] ?? [];
-        $inner = '';
+        $rawCode = '';
         foreach ($content as $child) {
-            $inner .= htmlspecialchars((string) ($child['text'] ?? ''), ENT_QUOTES, 'UTF-8');
+            $rawCode .= (string) ($child['text'] ?? '');
         }
 
+        // Mermaid is rendered client-side in show.blade.php — emit a plain
+        // code block and let the JS replace it post-load.
+        if ($language === 'mermaid') {
+            $escaped = htmlspecialchars($rawCode, ENT_QUOTES, 'UTF-8');
+
+            return "<pre><code class=\"language-mermaid\">{$escaped}</code></pre>";
+        }
+
+        // For any other language: server-side highlight via scrivo/highlight.php.
+        // The output is pre-escaped HTML with <span class="hljs-*"> markup.
+        // Falls back to plain escaped text on any error or unknown language.
         if ($language !== null && $language !== '') {
-            return "<pre><code class=\"language-{$language}\">{$inner}</code></pre>";
+            try {
+                $highlighter = new \Highlight\Highlighter();
+                $result = $highlighter->highlight($language, $rawCode);
+
+                return "<pre><code class=\"hljs language-{$result->language}\">{$result->value}</code></pre>";
+            } catch (\Throwable $e) {
+                // Unknown language or internal error — fall through to plain.
+                $escaped = htmlspecialchars($rawCode, ENT_QUOTES, 'UTF-8');
+
+                return "<pre><code class=\"language-{$language}\">{$escaped}</code></pre>";
+            }
         }
 
-        return "<pre><code>{$inner}</code></pre>";
+        $escaped = htmlspecialchars($rawCode, ENT_QUOTES, 'UTF-8');
+
+        return "<pre><code>{$escaped}</code></pre>";
     }
 
     /**
