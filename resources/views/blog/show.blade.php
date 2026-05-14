@@ -26,50 +26,52 @@
 @endif
 
 @push('schema')
+@php
+    // JSON_HEX_TAG escapes </script> safely; JSON_UNESCAPED_SLASHES keeps URLs readable.
+    $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
+    $blogPosting = array_filter([
+        '@context' => 'https://schema.org',
+        '@type' => 'BlogPosting',
+        'headline' => $post['title'] ?? '',
+        'description' => $summaryText ?? '',
+        'datePublished' => $post['publishedAt'] ?? '',
+        'dateModified' => $post['updatedAt'] ?? '',
+        'url' => $canonicalUrl ?? '',
+        'image' => !empty($socialImage) ? $socialImage : null,
+        'author' => [
+            '@type' => 'Person',
+            'name' => $post['authors'][0]['name'] ?? config('app.name'),
+        ],
+        'publisher' => [
+            '@type' => 'Organization',
+            'name' => config('app.name'),
+        ],
+        'mainEntityOfPage' => [
+            '@type' => 'WebPage',
+            '@id' => $canonicalUrl ?? '',
+        ],
+    ], static fn ($v) => $v !== null);
+@endphp
 <script type="application/ld+json">
-{
-    "@@context": "https://schema.org",
-    "@@type": "BlogPosting",
-    "headline": "{{ $post['title'] }}",
-    "description": "{{ $summaryText }}",
-    "datePublished": "{{ $post['publishedAt'] ?? '' }}",
-    "dateModified": "{{ $post['updatedAt'] ?? '' }}",
-    "url": "{{ $canonicalUrl }}",
-    @if(!empty($socialImage))
-    "image": "{{ $socialImage }}",
-    @endif
-    "author": {
-        "@@type": "Person",
-        "name": "{{ $post['authors'][0]['name'] ?? config('app.name') }}"
-    },
-    "publisher": {
-        "@@type": "Organization",
-        "name": "{{ config('app.name') }}"
-    },
-    "mainEntityOfPage": {
-        "@@type": "WebPage",
-        "@@id": "{{ $canonicalUrl }}"
-    }
-}
+{!! json_encode($blogPosting, $jsonFlags) !!}
 </script>
 @if(!empty($faqItems))
+@php
+    $faqPage = [
+        '@context' => 'https://schema.org',
+        '@type' => 'FAQPage',
+        'mainEntity' => array_map(static fn (array $faq) => [
+            '@type' => 'Question',
+            'name' => $faq['question'] ?? '',
+            'acceptedAnswer' => [
+                '@type' => 'Answer',
+                'text' => $faq['answer'] ?? '',
+            ],
+        ], $faqItems),
+    ];
+@endphp
 <script type="application/ld+json">
-{
-    "@@context": "https://schema.org",
-    "@@type": "FAQPage",
-    "mainEntity": [
-        @foreach($faqItems as $index => $faq)
-        {
-            "@@type": "Question",
-            "name": "{{ $faq['question'] ?? '' }}",
-            "acceptedAnswer": {
-                "@@type": "Answer",
-                "text": "{{ $faq['answer'] ?? '' }}"
-            }
-        }@if($index < count($faqItems) - 1),@endif
-        @endforeach
-    ]
-}
+{!! json_encode($faqPage, $jsonFlags) !!}
 </script>
 @endif
 @endpush
