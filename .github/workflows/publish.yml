@@ -54,6 +54,32 @@ jobs:
       - name: Install PHP dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
 
+      # Supply-chain guard: esbuild's postinstall is on the allowBuilds
+      # allowlist (pnpm-workspace.yaml) because vite needs the platform
+      # binary. Before we let it run, verify the pinned version + SHA in
+      # the lockfile matches the value we explicitly approved in
+      # .esbuild-pinned.txt. Any drift fails the build and forces a
+      # conscious review of the new esbuild release.
+      - name: Verify pinned esbuild build script
+        run: |
+          set -euo pipefail
+          EXPECTED=$(cat .esbuild-pinned.txt | tr -d '[:space:]')
+          ACTUAL_VERSION=$(awk '/^  esbuild@/{gsub(":",""); print $1; exit}' pnpm-lock.yaml)
+          ACTUAL_HASH=$(awk '/^  esbuild@/{getline; match($0, /sha512-[A-Za-z0-9+/=]+/); print substr($0, RSTART, RLENGTH); exit}' pnpm-lock.yaml)
+          ACTUAL="${ACTUAL_VERSION} ${ACTUAL_HASH}"
+          NORMALIZED=$(echo "$ACTUAL" | tr -d '[:space:]')
+          if [ "$NORMALIZED" != "$EXPECTED" ]; then
+            echo "::error::esbuild lockfile pin drifted from .esbuild-pinned.txt"
+            echo "Expected: $EXPECTED"
+            echo "Actual:   $NORMALIZED"
+            echo "If this is an intentional upgrade, audit the new release"
+            echo "(check npm advisories, GitHub releases, run sandtrace on"
+            echo "the tarball), then update .esbuild-pinned.txt in the same"
+            echo "commit as the lockfile change."
+            exit 1
+          fi
+          echo "esbuild pin verified: $NORMALIZED"
+
       - name: Install JavaScript dependencies
         run: pnpm install --frozen-lockfile
 
