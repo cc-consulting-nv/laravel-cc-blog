@@ -35,6 +35,7 @@ if ($autoload === null) {
 require $autoload;
 
 use CcConsulting\Blog\Cli\BulkImportCommand;
+use CcConsulting\Blog\Cli\DumpMetadataCommand;
 use CcConsulting\Blog\Cli\PublishCommand;
 
 array_shift($argv); // drop the bin name
@@ -45,6 +46,8 @@ switch ($subcommand) {
         exit((new PublishCommand())->run($argv));
     case 'bulk-publish':
         exit((new BulkImportCommand())->run($argv));
+    case 'dump-metadata':
+        exit((new DumpMetadataCommand())->run($argv));
     case 'help':
     case '--help':
     case '-h':
@@ -54,6 +57,7 @@ cc-blog — publish markdown blog posts to the CC platform
 usage:
   cc-blog publish <slug-dir> [--dry-run] [--strict-tags]
   cc-blog bulk-publish <root-dir> [--dry-run] [--fail-fast]
+  cc-blog dump-metadata <slug> [--apply <slug-dir>]
   cc-blog help
 
 env:

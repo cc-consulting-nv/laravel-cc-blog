@@ -14,7 +14,7 @@
         "livewire/livewire": "^3.0 || ^4.0",
         "scrivo/highlight.php": "^9.18",
         "spatie/laravel-package-tools": "^1.19",
-        "symfony/yaml": "^7.0"
+        "symfony/yaml": "^7.0 || ^8.0"
     },
     "bin": [
         "bin/cc-blog"
