@@ -1,7 +1,15 @@
 /node_modules
 /vendor
-/dist
 composer.lock
 .phpunit.result.cache
 phpunit.xml
 .env
+
+# dist/ IS committed — this is a published package, consumers consume the
+# pre-built artifacts. Rebuild locally with `pnpm build` after touching
+# resources/js/ and commit the dist/ change in the same PR. See SECURITY.md.
+
+# pnpm-workspace.yaml is per-developer (e.g. for local allowBuilds). We do
+# not commit it because that would silently grant build-script execution to
+# any future CI workflow. Local developers can create their own.
+/pnpm-workspace.yaml

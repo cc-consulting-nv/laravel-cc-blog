@@ -40,54 +40,43 @@ jobs:
           php-version: "8.4"
           tools: composer:v2
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-
-      - name: Enable Corepack
-        run: corepack enable
-
       - name: Validate Composer metadata
         run: composer validate --strict
 
       - name: Install PHP dependencies
         run: composer install --no-interaction --no-progress --prefer-dist
 
-      # Supply-chain guard: esbuild's postinstall is on the allowBuilds
-      # allowlist (pnpm-workspace.yaml) because vite needs the platform
-      # binary. Before we let it run, verify the pinned version + SHA in
-      # the lockfile matches the value we explicitly approved in
-      # .esbuild-pinned.txt. Any drift fails the build and forces a
-      # conscious review of the new esbuild release.
-      - name: Verify pinned esbuild build script
+      # dist/ is committed (see SECURITY.md). CI never runs `pnpm install` or
+      # `pnpm build` — that closes the supply-chain postinstall vector
+      # (Shai-Hulud / Mini Shai-Hulud class of attack). Contributors who touch
+      # resources/js/ rebuild locally and commit the dist/ change in the same PR.
+      - name: Verify dist artifacts present
         run: |
           set -euo pipefail
-          EXPECTED=$(cat .esbuild-pinned.txt | tr -d '[:space:]')
-          ACTUAL_VERSION=$(awk '/^  esbuild@/{gsub(":",""); print $1; exit}' pnpm-lock.yaml)
-          ACTUAL_HASH=$(awk '/^  esbuild@/{getline; match($0, /sha512-[A-Za-z0-9+/=]+/); print substr($0, RSTART, RLENGTH); exit}' pnpm-lock.yaml)
-          ACTUAL="${ACTUAL_VERSION} ${ACTUAL_HASH}"
-          NORMALIZED=$(echo "$ACTUAL" | tr -d '[:space:]')
-          if [ "$NORMALIZED" != "$EXPECTED" ]; then
-            echo "::error::esbuild lockfile pin drifted from .esbuild-pinned.txt"
-            echo "Expected: $EXPECTED"
-            echo "Actual:   $NORMALIZED"
-            echo "If this is an intentional upgrade, audit the new release"
-            echo "(check npm advisories, GitHub releases, run sandtrace on"
-            echo "the tarball), then update .esbuild-pinned.txt in the same"
-            echo "commit as the lockfile change."
+          test -d dist || { echo "::error::dist/ missing — rebuild locally with 'pnpm build' and commit"; exit 1; }
+          test -n "$(ls -A dist)" || { echo "::error::dist/ empty"; exit 1; }
+          test -f dist/blog-admin.js || { echo "::error::dist/blog-admin.js missing"; exit 1; }
+          test -f dist/laravel-cc-blog.css || { echo "::error::dist/laravel-cc-blog.css missing"; exit 1; }
+          echo "dist/ verified:"
+          ls -la dist/
+
+      # Drift guard: if resources/js/ changed in this push, dist/ must also
+      # have changed. Catches commits that bumped JS source but forgot to rebuild.
+      - name: Verify dist is in sync with resources/js
+        run: |
+          set -euo pipefail
+          # Compare the most recent commit that touched resources/js/ vs the most
+          # recent commit that touched dist/. dist/ should be at-or-after.
+          JS_TS=$(git log -1 --format=%ct -- 'resources/js/' || echo 0)
+          DIST_TS=$(git log -1 --format=%ct -- 'dist/' || echo 0)
+          if [ "$JS_TS" -gt "$DIST_TS" ] 2>/dev/null; then
+            echo "::error::resources/js/ was modified more recently than dist/."
+            echo "Did you forget to run 'pnpm build' and commit dist/?"
+            git log -1 --oneline -- 'resources/js/'
+            git log -1 --oneline -- 'dist/'
             exit 1
           fi
-          echo "esbuild pin verified: $NORMALIZED"
-
-      - name: Install JavaScript dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build package assets
-        run: pnpm build
-
-      - name: Verify dist artifacts produced
-        run: test -d dist && test -n "$(ls -A dist)"
+          echo "dist/ is in sync with resources/js/"
 
   release:
     runs-on: ubuntu-latest
@@ -105,20 +94,6 @@ jobs:
         with:
           php-version: "8.4"
           tools: composer:v2
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: "22"
-
-      - name: Enable Corepack
-        run: corepack enable
-
-      - name: Install JavaScript dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Build package assets
-        run: pnpm build
 
       - name: Determine next version
         id: version
@@ -200,21 +175,17 @@ jobs:
             core.setOutput('release_type', releaseType);
             core.info(`Publishing ${tagName} (${releaseType}).`);
 
-      # dist/ is gitignored on main, but Composer git installs need it.
-      # Make a release-only commit with built dist/ added, point the tag at
-      # that commit, and push. Consumers checking out the tag get a tree
-      # with dist/ included; main stays clean.
-      - name: Tag release commit with built assets
+      # dist/ is committed on main now, so we can tag the current commit
+      # directly instead of building a release-only commit with added assets.
+      - name: Tag release
         if: steps.version.outputs.should_release == 'true'
         env:
           TAG_NAME: ${{ steps.version.outputs.tag_name }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f dist
-          git commit -m "chore(release): build dist for ${TAG_NAME}"
-          git tag -f "${TAG_NAME}"
-          git push origin "${TAG_NAME}" --force
+          git tag "${TAG_NAME}"
+          git push origin "${TAG_NAME}"
 
       - name: Create GitHub release
         if: steps.version.outputs.should_release == 'true'

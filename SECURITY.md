@@ -1,54 +1,69 @@
 # Security Posture
 
-## Build-Script Allowlist (Supply-Chain)
+## Supply-Chain: No Node In CI
 
-pnpm 11 refuses to run dependency build scripts by default, which is the right
-default after the September 2025 Shai-Hulud and May 2026 Mini Shai-Hulud
-attacks where malicious npm postinstall scripts stole credentials and OIDC
-tokens from CI runners. We participate in that default explicitly.
+This package ships its `dist/` (Vue + Tiptap admin assets) **committed to
+git**. CI never runs `pnpm install` or `pnpm build`. That closes the
+postinstall-script supply-chain vector that Shai-Hulud (Sep 2025) and Mini
+Shai-Hulud (May 2026) weaponized — those attacks executed attacker-controlled
+postinstall code on CI runners and exfiltrated `GITHUB_TOKEN` / OIDC publish
+tokens.
 
-The only build script we re-enable is **esbuild**, because vite needs the
-esbuild platform binary at build time and there is no published path that
-avoids it. The opt-in lives in `pnpm-workspace.yaml`:
+### How it works
 
-```yaml
-allowBuilds:
-  esbuild: true
+- `resources/js/` is the source for the Filament Tiptap admin (Vue 3,
+  Tiptap, ProseMirror).
+- `dist/` is the built output (vite library mode, ES modules).
+- **`dist/` is committed**. Consumers pull it via Composer and publish to
+  their app's `public/vendor/cc-blog/`.
+- The CI publish workflow (`/.github/workflows/publish.yml`) does PHP-only
+  checks: `composer validate`, `composer install`, presence + freshness of
+  `dist/`. No Node, no esbuild, no postinstall execution.
+
+### Contributor flow when touching `resources/js/`
+
+```bash
+# After editing anything in resources/js/
+pnpm install        # one-time per machine, or after lockfile changes
+pnpm build          # regenerate dist/
+git add resources/js dist
+git commit -m "..."
 ```
 
-To narrow the blast radius if a compromised esbuild ever ships, we layer
-three defenses:
+CI verifies on every push:
 
-1. **Exact version + SHA-512 integrity pin in `pnpm-lock.yaml`.** Any
-   different tarball than the one we vetted fails install with an integrity
-   mismatch.
-2. **Out-of-band SHA pin in `.esbuild-pinned.txt`.** The CI publish workflow
-   verifies the lockfile entry matches this file *before* pnpm install runs.
-   A lockfile push that quietly bumps esbuild fails the build and prints a
-   diff. This is belt-and-suspenders against a lockfile-only attack.
-3. **Sandtrace scan on every PR.** Surfaces secrets, obfuscation, and
-   typosquats before merge.
+1. `dist/blog-admin.js` and `dist/laravel-cc-blog.css` exist.
+2. The most recent commit touching `dist/` is at-or-after the most recent
+   commit touching `resources/js/`. If you bumped JS source but forgot
+   to rebuild, CI fails with a clear error.
 
-Upgrading esbuild is a deliberate two-step:
+### Why this approach beats `allowBuilds`
 
-1. Update `pnpm-lock.yaml` (e.g. `pnpm up esbuild`).
-2. Copy the new pin into `.esbuild-pinned.txt`:
-   ```bash
-   grep -A1 "^  esbuild@" pnpm-lock.yaml | head -2 | \
-     awk 'NR==1{v=$1; gsub(":","",v)} NR==2{match($0,/sha512-[A-Za-z0-9+/=]+/); h=substr($0,RSTART,RLENGTH)} END{print v, h}' \
-     > .esbuild-pinned.txt
-   ```
-3. Commit both files together. Skim the new esbuild release notes for
-   anything unusual (new postinstall behavior, new maintainers, sudden
-   minification of dist).
+pnpm 11's `allowBuilds` lets you opt-in to running specific postinstall
+scripts. We initially used it (esbuild needs its postinstall to compile the
+platform binary). It's a real trust grant — if the pinned esbuild version is
+ever compromised (npm account takeover, OIDC trusted-publisher abuse), the
+attacker's code runs on our publish runner with `GITHUB_TOKEN` in scope.
 
-If you can avoid esbuild entirely (ship pre-built `dist/`, skip CI Node) —
-do that instead. This package opts into the build because the dist/ output
-is consumed by downstream sites' vite pipelines and a single source of
-truth is worth more than the additional CI surface area. Future
-consideration: split build into an isolated, secret-less runner job.
+Shipping pre-built `dist/` removes the option to make that mistake. The
+postinstall script never executes on a CI runner that has secrets. Local
+developers running `pnpm build` run it on workstations that don't have the
+publish credentials.
 
-## Reporting
+### Local development: pnpm 11 vs 10
+
+Local `pnpm install` may still hit `[ERR_PNPM_IGNORED_BUILDS]` for esbuild
+on pnpm 11+. Either:
+- Use pnpm 10.33.x: `corepack use pnpm@10.33.2`
+- Or set `pnpm-workspace.yaml` with `allowBuilds: {esbuild: true}` on your
+  local machine. This is your laptop, not CI; the security tradeoff is
+  yours to make.
+
+We deliberately don't commit a project-wide `pnpm-workspace.yaml` with
+allowBuilds, because that would silently allow it on any future CI
+workflow someone adds.
+
+## Reporting Issues
 
 Security issues: open an issue marked `[security]` or contact the maintainer
 directly. Do not disclose publicly before a patch is available.
