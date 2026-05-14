@@ -43,6 +43,7 @@ use Illuminate\Support\Collection;
  * @property string|null $social_image_url
  * @property string|null $answer_summary
  * @property array<int, array{question: string, answer: string}>|null $faq_items
+ * @property array<int, array{name: string, text: string}>|null $howto_steps
  * @property CarbonInterface|null $publishedAt
  * @property CarbonInterface|null $scheduled_for
  * @property CarbonInterface|null $createdAt
@@ -103,6 +104,7 @@ final class BlogPost extends Model implements HasRichContent
         'social_image_url',
         'answer_summary',
         'faq_items',
+        'howto_steps',
         'publishedAt',
         'scheduled_for',
         'createdAt',
@@ -231,6 +233,9 @@ final class BlogPost extends Model implements HasRichContent
         $faqItems = $data['faqItems'] ?? $data['faq_items'] ?? null;
         $post->faq_items = is_array($faqItems) ? $faqItems : null;
 
+        $howtoSteps = $data['howtoSteps'] ?? $data['howto_steps'] ?? null;
+        $post->howto_steps = is_array($howtoSteps) ? $howtoSteps : null;
+
         $publishedAt = $data['publishedAt'] ?? null;
         if (is_string($publishedAt)) {
             $post->publishedAt = Carbon::parse($publishedAt);
@@ -357,6 +362,10 @@ final class BlogPost extends Model implements HasRichContent
             $payload['faq_items'] = $this->faq_items;
         }
 
+        if (is_array($this->howto_steps) && $this->howto_steps !== []) {
+            $payload['howto_steps'] = $this->howto_steps;
+        }
+
         if ($this->scheduled_for !== null) {
             $payload['scheduled_for'] = $this->scheduled_for->toIso8601String();
         }
@@ -447,6 +456,7 @@ final class BlogPost extends Model implements HasRichContent
             'isFeatured' => 'boolean',
             'feature_order' => 'integer',
             'faq_items' => 'array',
+            'howto_steps' => 'array',
             'publishedAt' => 'datetime',
             'scheduled_for' => 'datetime',
             'createdAt' => 'datetime',

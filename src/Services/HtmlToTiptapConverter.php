@@ -51,7 +51,7 @@ final class HtmlToTiptapConverter
             ];
         }
 
-        $content = self::parseChildren($wrapper);
+        $content = self::parseBlockChildren($wrapper);
 
         // Ensure at least one block node
         if ($content === []) {
@@ -78,6 +78,46 @@ final class HtmlToTiptapConverter
             if ($parsed !== null) {
                 $nodes[] = $parsed;
             }
+        }
+
+        return $nodes;
+    }
+
+    /**
+     * Parse child nodes for a context that only accepts block-level children
+     * (doc, blockquote, listItem, table-cell-like). Drops DOMText nodes that
+     * are pure whitespace — the HTML parser leaves these between block
+     * siblings ("</p>\n<p>" → text node "\n" between the two paragraphs), and
+     * Tiptap's schema rejects text nodes as direct children of block-only
+     * contexts.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private static function parseBlockChildren(DOMNode $node): array
+    {
+        $nodes = [];
+
+        foreach ($node->childNodes as $child) {
+            // Whitespace-only text nodes between block siblings are layout
+            // artifacts from the HTML serialization — drop them.
+            if ($child instanceof DOMText && trim($child->textContent) === '') {
+                continue;
+            }
+
+            $parsed = self::parseNode($child);
+            if ($parsed === null) {
+                continue;
+            }
+
+            // If the parsed node is a `text` node (because the source HTML had
+            // a stray text run between blocks), wrap it in a paragraph so the
+            // Tiptap doc schema stays valid. This handles cases like
+            // "Some loose text<p>and a paragraph</p>" inside a blockquote.
+            if (($parsed['type'] ?? null) === 'text') {
+                $parsed = ['type' => 'paragraph', 'content' => [$parsed]];
+            }
+
+            $nodes[] = $parsed;
         }
 
         return $nodes;
@@ -303,7 +343,7 @@ final class HtmlToTiptapConverter
         }
 
         if ($hasBlocks) {
-            $content = self::parseChildren($node);
+            $content = self::parseBlockChildren($node);
         } else {
             // Wrap inline content in a paragraph
             $inlineContent = self::parseInlineChildren($node);
@@ -320,12 +360,9 @@ final class HtmlToTiptapConverter
      */
     private static function parseBlockquote(DOMElement $node): array
     {
-        $content = self::parseChildren($node);
-        $hasOnlyText = array_all($content, fn (array $child): bool => ! (($child['type'] ?? '') !== 'text'));
-
-        if ($hasOnlyText && $content !== []) {
-            $content = [['type' => 'paragraph', 'content' => $content]];
-        }
+        // parseBlockChildren drops stray whitespace and auto-wraps lone text
+        // nodes in paragraphs, so the blockquote children are always block-level.
+        $content = self::parseBlockChildren($node);
 
         if ($content === []) {
             $content = [['type' => 'paragraph']];
