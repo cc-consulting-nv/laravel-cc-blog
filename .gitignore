@@ -13,3 +13,4 @@ phpunit.xml
 # not commit it because that would silently grant build-script execution to
 # any future CI workflow. Local developers can create their own.
 /pnpm-workspace.yaml
+/.phpunit.cache
