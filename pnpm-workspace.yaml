@@ -1,0 +1,10 @@
+# Supply-chain cooldown (Shai-Hulud-class mitigation): refuse to install
+# third-party package versions published less than 7 days ago, so a
+# compromised release is caught/yanked before it can reach us.
+# Value is in MINUTES (10080 = 7 days).
+minimumReleaseAge: 10080
+# First-party packages are exempt — our own publishes must install immediately.
+minimumReleaseAgeExclude:
+  - '@cc-consulting-nv/*'
+# NEVER commit allowBuilds here (see .gitignore comment) — build approvals
+# stay local-only so no CI workflow silently gains script execution.
