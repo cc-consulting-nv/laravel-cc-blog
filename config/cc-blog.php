@@ -9,6 +9,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Login route name
+    |--------------------------------------------------------------------------
+    |
+    | Where users are sent when the session has no CC Platform token or the
+    | API rejects an expired one (used by the EnsureCcPlatformToken panel
+    | middleware and the auth-failure exception renderer).
+    |
+    */
+    'login_route' => env('CC_PLATFORM_LOGIN_ROUTE', 'login'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Media (CDN) URL
     |--------------------------------------------------------------------------
     |
