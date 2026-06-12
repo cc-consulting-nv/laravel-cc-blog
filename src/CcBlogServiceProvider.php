@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace CcConsulting\Blog;
 
+use CcConsulting\Blog\Exceptions\RedirectAuthFailuresToLogin;
 use CcConsulting\Blog\Livewire\BlogPostSynth;
 use CcConsulting\Blog\Services\CcPlatformApi;
 use Filament\Support\Assets\Css;
 use Filament\Support\Assets\Js;
 use Filament\Support\Facades\FilamentAsset;
+use Illuminate\Contracts\Debug\ExceptionHandler;
+use Illuminate\Foundation\Exceptions\Handler;
 use Livewire\Livewire;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
@@ -28,6 +31,14 @@ final class CcBlogServiceProvider extends PackageServiceProvider
     {
         // Register CcPlatformApi as singleton
         $this->app->singleton(CcPlatformApi::class);
+
+        // Redirect CC Platform auth failures (expired/missing token after a
+        // failed refresh) to the host app's login route instead of a 500.
+        $this->callAfterResolving(ExceptionHandler::class, function (ExceptionHandler $handler): void {
+            if ($handler instanceof Handler) {
+                $handler->renderable(new RedirectAuthFailuresToLogin);
+            }
+        });
 
         // Register Livewire synthesizer for API-backed BlogPost model.
         // Must use app->booted() to ensure registration happens AFTER all
