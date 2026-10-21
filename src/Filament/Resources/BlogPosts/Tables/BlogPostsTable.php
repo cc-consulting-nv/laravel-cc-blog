@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CcConsulting\Blog\Filament\Resources\BlogPosts\Tables;
 
 use CcConsulting\Blog\Models\BlogPost;
+use CcConsulting\Blog\Services\BrowserTimezone;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -73,13 +74,13 @@ final class BlogPostsTable
 
                 TextColumn::make('publishedAt')
                     ->label('Published')
-                    ->dateTime()
+                    ->dateTime(timezone: BrowserTimezone::get())
                     ->sortable()
                     ->placeholder('—'),
 
                 TextColumn::make('createdAt')
                     ->label('Created')
-                    ->dateTime()
+                    ->dateTime(timezone: BrowserTimezone::get())
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
