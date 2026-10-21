@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CcConsulting\Blog\Filament\Resources\BlogPosts\Schemas;
 
 use CcConsulting\Blog\Filament\Plugins\MarkdownPastePlugin;
+use CcConsulting\Blog\Services\BrowserTimezone;
 use CcConsulting\Blog\Services\CcPlatformApi;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Repeater;
@@ -77,7 +78,9 @@ final class BlogPostForm
                     ->required(),
 
                 DateTimePicker::make('scheduled_for')
-                    ->label('Schedule For'),
+                    ->label('Schedule For')
+                    ->timezone(fn (): string => BrowserTimezone::get())
+                    ->helperText(fn (): string => 'Time zone: '.BrowserTimezone::get()),
 
                 Select::make('category_id')
                     ->label('Category')

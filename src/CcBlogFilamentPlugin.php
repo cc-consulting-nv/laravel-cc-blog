@@ -6,8 +6,10 @@ namespace CcConsulting\Blog;
 
 use CcConsulting\Blog\Filament\Resources\BlogPosts\BlogPostResource;
 use CcConsulting\Blog\Http\Middleware\EnsureCcPlatformToken;
+use CcConsulting\Blog\Services\BrowserTimezone;
 use Filament\Contracts\Plugin;
 use Filament\Panel;
+use Filament\View\PanelsRenderHook;
 
 final class CcBlogFilamentPlugin implements Plugin
 {
@@ -33,6 +35,9 @@ final class CcBlogFilamentPlugin implements Plugin
         $panel->authMiddleware([
             EnsureCcPlatformToken::class,
         ]);
+
+        // Blog dates show in the author's browser timezone (BrowserTimezone).
+        $panel->renderHook(PanelsRenderHook::HEAD_END, fn (): string => BrowserTimezone::script());
     }
 
     public function boot(Panel $panel): void

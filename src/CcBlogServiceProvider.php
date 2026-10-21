@@ -6,11 +6,13 @@ namespace CcConsulting\Blog;
 
 use CcConsulting\Blog\Exceptions\RedirectAuthFailuresToLogin;
 use CcConsulting\Blog\Livewire\BlogPostSynth;
+use CcConsulting\Blog\Services\BrowserTimezone;
 use CcConsulting\Blog\Services\CcPlatformApi;
 use Filament\Support\Assets\Css;
 use Filament\Support\Assets\Js;
 use Filament\Support\Facades\FilamentAsset;
 use Illuminate\Contracts\Debug\ExceptionHandler;
+use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Exceptions\Handler;
 use Livewire\Livewire;
 use Spatie\LaravelPackageTools\Package;
@@ -39,6 +41,9 @@ final class CcBlogServiceProvider extends PackageServiceProvider
                 $handler->renderable(new RedirectAuthFailuresToLogin);
             }
         });
+
+        // The timezone cookie is written by browser JS, so it is never encrypted.
+        EncryptCookies::except(BrowserTimezone::COOKIE);
 
         // Register Livewire synthesizer for API-backed BlogPost model.
         // Must use app->booted() to ensure registration happens AFTER all
