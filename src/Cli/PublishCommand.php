@@ -257,7 +257,7 @@ final class PublishCommand
         }
 
         // Interactive login. Prompt only if stdin is a TTY; otherwise fail.
-        if (! posix_isatty(STDIN)) {
+        if (! stream_isatty(STDIN)) {
             throw new RuntimeException(
                 'no token in $CC_BLOG_TOKEN or ~/.cc-blog/token, and stdin is not a TTY for interactive login'
             );
